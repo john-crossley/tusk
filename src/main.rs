@@ -63,35 +63,41 @@ enum Commands {
     },
 }
 
-// impl Commands { // Clean up improvement?
-//     fn run(&self, cli: &Cli) -> Result<()> {
-//         match self {
-//             Commands::Add { text }
-//         }
-//     }
-// }
-
 fn main() -> Result<(), Error> {
     let cli = Cli::parse();
 
-    match cli.command.as_ref() {
-        Some(Commands::Add { text }) => run_add(&cli, text)?,
-        Some(Commands::Ls {}) | None => run_ls(&cli)?,
-    };
+    if let Err(e) = dispatch(&cli) {
+        eprintln!("Tusk: {e}");
+        std::process::exit(1);
+    }
 
     Ok(())
 }
 
+fn dispatch(cli: &Cli) -> io::Result<()> {
+    match cli.command.as_ref() {
+        Some(Commands::Add { text }) => run_add(&cli, text),
+        Some(Commands::Ls {}) | None => run_ls(&cli)
+    }
+}
+
 // command handler functions
 
-fn run_ls(cli: &Cli) -> Result<(), Error> {
+fn run_ls(cli: &Cli) -> io::Result<()> {
     let dayfile = get_dayfile(cli)?;
-    render(dayfile, cli)?;
+    render(&dayfile, cli)?;
 
     Ok(())
 }
 
 fn run_add(cli: &Cli, text: &str) -> Result<(), Error> {
+    if text.is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "Oops, did you forget to add some text?",
+        ));
+    }
+
     let mut dayfile = get_dayfile(&cli)?;
 
     let next_idx: u32 = (dayfile.items.len() + 1)
@@ -105,15 +111,15 @@ fn run_add(cli: &Cli, text: &str) -> Result<(), Error> {
     let date = cli.date.unwrap_or_else(today_date);
     let path = resolve_day_file_path(&date, cli.data_dir.as_deref(), cli.verbose);
 
-    let dayfile = save_dayfile(&path, dayfile)?;
-    render(dayfile, cli)?;
+    save_dayfile(&path, &dayfile)?;
+    render(&dayfile, cli)?;
 
     Ok(())
 }
 
 // helper functions
 
-fn render(dayfile: DayFile, cli: &Cli) -> Result<(), Error> {
+fn render(dayfile: &DayFile, cli: &Cli) -> Result<(), Error> {
     let mut stdout = io::stdout().lock();
 
     if cli.json {
@@ -150,12 +156,6 @@ fn item_completion_status(i: &Item) -> &'static str {
 }
 
 fn get_dayfile(cli: &Cli) -> Result<DayFile, Error> {
-    // let date = cli
-    //     .date
-    //     .as_deref()
-    //     .map(|s| NaiveDate::parse_from_str(s, "%Y-%m-%d").expect("Use YYYY-MM-DD"))
-    //     .unwrap_or_else(today_date);
-
     let date = cli.date.unwrap_or_else(today_date);
 
     let path = resolve_day_file_path(&date, cli.data_dir.as_deref(), cli.verbose);
