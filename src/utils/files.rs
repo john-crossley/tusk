@@ -35,7 +35,7 @@ pub fn resolve_day_file_path(date: &NaiveDate, base_dir: Option<&Path>, verbose:
     working_dir
 }
 
-pub fn load_or_create_dayfile(path: &Path, date: NaiveDate) -> io::Result<DayFile> {
+pub fn load_or_create_dayfile(path: &Path, date: NaiveDate) -> Result<DayFile, Error> {
     match File::open(path) {
         Ok(file) => {
             let buffer = BufReader::new(file);

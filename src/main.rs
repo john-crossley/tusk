@@ -1,6 +1,5 @@
 use std::{
-    io::{self, Error, Write},
-    path::PathBuf,
+    io::{self, Write, Error}, path::PathBuf
 };
 
 use chrono::NaiveDate;
@@ -55,18 +54,34 @@ struct Cli {
 enum Commands {
     #[command(name = "ls", about = "List items for the target date")]
     Ls {},
+    
+    #[command(name = "add", about = "Add a new item to your day")]
+    Add {
+        /// The description of the item being added.
+        text: String,
+    },
 }
 
-fn main() {
+// impl Commands { // Clean up improvement?
+//     fn run(&self, cli: &Cli) -> Result<()> {
+//         match self {
+//             Commands::Add { text }
+//         }
+//     }
+// }
+
+fn main() -> Result<(), Error> {
     let cli = Cli::parse();
 
     match cli.command.as_ref() {
-        Some(Commands::Ls {}) | None => match run_ls(&cli) {
-            Ok(()) => {}
-            Err(e) => eprintln!("Error: {}", e),
-        },
-    }
+        Some(Commands::Add { text }) => run_add(&cli, text)?,
+        Some(Commands::Ls {}) | None => run_ls(&cli)?
+    };
+
+    Ok(())
 }
+
+// command handler functions
 
 fn run_ls(cli: &Cli) -> Result<(), Error> {
     // 1. Resolve date (use today if None)
@@ -113,6 +128,12 @@ fn run_ls(cli: &Cli) -> Result<(), Error> {
     Ok(())
 }
 
+fn run_add(cli: &Cli, text: &String) -> Result<(), Error> {
+    Ok(())
+}
+
+// helper functions
+
 fn item_completion_status(i: &Item) -> &'static str {
     if i.done_at.is_none() { " " } else { "x" }
 }
@@ -128,7 +149,9 @@ fn get_dayfile(cli: &Cli) -> Result<DayFile, Error> {
 
     let path = resolve_day_file_path(&date, cli.data_dir.as_deref(), cli.verbose);
 
-    load_or_create_dayfile(path.as_path(), date)
+    let dayfile = load_or_create_dayfile(path.as_path(), date)?;
+
+    Ok(dayfile)
 }
 
 fn parse_ymd(d: &str) -> Result<NaiveDate, String> {
