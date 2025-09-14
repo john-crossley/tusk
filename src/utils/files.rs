@@ -7,7 +7,7 @@ use std::{
 use chrono::{Datelike, NaiveDate};
 use directories::ProjectDirs;
 
-use crate::models::dayfile::DayFile;
+use crate::models::dayfile::{self, DayFile};
 
 pub fn tusk_data_root() -> PathBuf {
     match ProjectDirs::from("io", "jonnothebonno", "tusk") {
@@ -33,6 +33,16 @@ pub fn resolve_day_file_path(date: &NaiveDate, base_dir: Option<&Path>, verbose:
     }
 
     working_dir
+}
+
+pub fn save_dayfile(path: &Path, dayfile: DayFile) -> Result<DayFile, Error> {
+    let file = File::create(path)?;
+    let mut writer = BufWriter::new(file);
+    serde_json::to_writer_pretty(&mut writer, &dayfile)?;
+    writer.write_all(b"\n")?;
+    writer.flush()?;
+    
+    Ok(dayfile)
 }
 
 pub fn load_or_create_dayfile(path: &Path, date: NaiveDate) -> Result<DayFile, Error> {
@@ -69,11 +79,5 @@ fn create_new_dayfile(path: &Path, date: NaiveDate) -> io::Result<DayFile> {
         items: vec![],
     };
 
-    let file = File::create(path)?;
-    let mut writer = BufWriter::new(file);
-    serde_json::to_writer_pretty(&mut writer, &dayfile)?;
-    writer.write_all(b"\n")?;
-    writer.flush()?;
-
-    Ok(dayfile)
+    save_dayfile(path, dayfile)
 }

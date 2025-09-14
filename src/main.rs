@@ -1,5 +1,6 @@
 use std::{
-    io::{self, Write, Error}, path::PathBuf
+    io::{self, Error, Write},
+    path::PathBuf,
 };
 
 use chrono::NaiveDate;
@@ -12,7 +13,7 @@ use crate::{
     models::{dayfile::DayFile, item::Item},
     utils::{
         dates::today_date,
-        files::{load_or_create_dayfile, resolve_day_file_path},
+        files::{load_or_create_dayfile, resolve_day_file_path, save_dayfile},
     },
 };
 
@@ -54,7 +55,7 @@ struct Cli {
 enum Commands {
     #[command(name = "ls", about = "List items for the target date")]
     Ls {},
-    
+
     #[command(name = "add", about = "Add a new item to your day")]
     Add {
         /// The description of the item being added.
@@ -75,7 +76,7 @@ fn main() -> Result<(), Error> {
 
     match cli.command.as_ref() {
         Some(Commands::Add { text }) => run_add(&cli, text)?,
-        Some(Commands::Ls {}) | None => run_ls(&cli)?
+        Some(Commands::Ls {}) | None => run_ls(&cli)?,
     };
 
     Ok(())
@@ -84,24 +85,40 @@ fn main() -> Result<(), Error> {
 // command handler functions
 
 fn run_ls(cli: &Cli) -> Result<(), Error> {
-    // 1. Resolve date (use today if None)
-    // 2. Resolve data_dir and date file path
-    // 3. Load or create empty day file
-    // 4. Render as human text or JSON depending on cli.json
-
-    // println!(
-    //     "(ls) date={date} json={} no_colour={} data_dir={:?}",
-    //     cli.json, cli.no_colour, cli.data_dir
-    // )
-
     let dayfile = get_dayfile(cli)?;
+    render(dayfile, cli)?;
 
+    Ok(())
+}
+
+fn run_add(cli: &Cli, text: &str) -> Result<(), Error> {
+    let mut dayfile = get_dayfile(&cli)?;
+
+    let next_idx: u32 = (dayfile.items.len() + 1)
+        .try_into()
+        .map_err(|_| io::Error::new(io::ErrorKind::Other, "I wasn't built for this many items."))?;
+
+    let new_item = Item::new(text.to_owned(), next_idx);
+
+    dayfile.items.push(new_item);
+
+    let date = cli.date.unwrap_or_else(today_date);
+    let path = resolve_day_file_path(&date, cli.data_dir.as_deref(), cli.verbose);
+
+    let dayfile = save_dayfile(&path, dayfile)?;
+    render(dayfile, cli)?;
+
+    Ok(())
+}
+
+// helper functions
+
+fn render(dayfile: DayFile, cli: &Cli) -> Result<(), Error> {
     let mut stdout = io::stdout().lock();
 
     if cli.json {
         serde_json::to_writer_pretty(&mut stdout, &dayfile)?;
         writeln!(&mut stdout)?;
-        stdout.flush()?;
     } else {
         if dayfile.items.is_empty() {
             writeln!(
@@ -116,23 +133,17 @@ fn run_ls(cli: &Cli) -> Result<(), Error> {
             writeln!(
                 &mut stdout,
                 "{}) [{}]\t{}",
-                idx,
+                idx + 1,
                 item_completion_status(&i),
                 i.text
             )?;
         }
-
-        stdout.flush()?;
     }
 
+    stdout.flush()?;
+
     Ok(())
 }
-
-fn run_add(cli: &Cli, text: &String) -> Result<(), Error> {
-    Ok(())
-}
-
-// helper functions
 
 fn item_completion_status(i: &Item) -> &'static str {
     if i.done_at.is_none() { " " } else { "x" }
