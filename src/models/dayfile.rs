@@ -1,8 +1,9 @@
 use chrono::{NaiveDate};
+use serde::{Deserialize, Serialize};
 
 use crate::models::item::Item;
 
-#[derive(Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct DayFile {
     pub date: NaiveDate,
     pub items: Vec<Item>,

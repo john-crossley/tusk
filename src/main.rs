@@ -3,10 +3,10 @@ use std::path::PathBuf;
 use chrono::NaiveDate;
 use clap::{Parser, Subcommand};
 
-use crate::utils::{dates::today_date, files::resolve_day_file};
-
 mod models;
 mod utils;
+
+use crate::utils::{dates::today_date, files::{load_or_create_dayfile, resolve_day_file_path}};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -22,7 +22,7 @@ struct Cli {
     date: Option<String>,
 
     /// Override the base data directory (default: platform-specific app data dir).
-    #[arg(long, value_name = "FILE")]
+    #[arg(long, value_name = "DIR")]
     data_dir: Option<PathBuf>,
 
     /// Output results as JSON instead of human-readable text.
@@ -45,8 +45,8 @@ enum Commands {
 fn main() {
     let cli = Cli::parse();
 
-    match cli.command.as_ref().unwrap_or(&Commands::Ls {}) {
-        Commands::Ls {} => run_ls(&cli),
+    match cli.command.as_ref() {
+        Some(Commands::Ls {}) | None => run_ls(&cli),
     }
 }
 
@@ -59,11 +59,13 @@ fn run_ls(cli: &Cli) {
     let date = cli
         .date
         .as_deref()
-        .map(|s| NaiveDate::parse_from_str(s, "%Y-%M-%D").expect("invalid date"))
+        .map(|s| NaiveDate::parse_from_str(s, "%Y-%n-%d").expect("Use YYYY-MM-DD"))
         .unwrap_or_else(today_date);
 
-    let day_file = resolve_day_file(&date, cli.data_dir.as_deref());
-    println!("{:?}", day_file);
+    let path = resolve_day_file_path(&date, cli.data_dir.as_deref());
+    load_or_create_dayfile(path.as_path(), date);
+
+    // println!("{}", day_file.display());
 
     println!(
         "(ls) date={date} json={} no_colour={} data_dir={:?}",
