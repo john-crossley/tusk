@@ -3,7 +3,7 @@ use std::{
     path::PathBuf,
 };
 
-use chrono::NaiveDate;
+use chrono::{NaiveDate, Utc};
 use clap::{Parser, Subcommand};
 
 mod models;
@@ -61,6 +61,9 @@ enum Commands {
         /// The description of the item being added.
         text: String,
     },
+
+    #[command(name = "done", about = "Mark an item done")]
+    Done { id: String },
 }
 
 fn main() -> Result<(), Error> {
@@ -77,11 +80,32 @@ fn main() -> Result<(), Error> {
 fn dispatch(cli: &Cli) -> io::Result<()> {
     match cli.command.as_ref() {
         Some(Commands::Add { text }) => run_add(&cli, text),
-        Some(Commands::Ls {}) | None => run_ls(&cli)
+        Some(Commands::Ls {}) | None => run_ls(&cli),
+        Some(Commands::Done { id }) => run_done(&cli, id),
     }
 }
 
 // command handler functions
+
+fn run_done(cli: &Cli, id: &str) -> io::Result<()> {
+    let mut dayfile = get_dayfile(cli)?;
+
+    if let Some(item) = dayfile.items.iter_mut().find(|i| i.id == id) {
+        item.done_at = Some(Utc::now());
+
+        let date = cli.date.unwrap_or_else(today_date);
+        let path = resolve_day_file_path(&date, cli.data_dir.as_deref(), cli.verbose);
+
+        save_dayfile(&path, &dayfile)?;
+
+        run_ls(cli)
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!("id not found '{}'", id),
+        ))
+    }
+}
 
 fn run_ls(cli: &Cli) -> io::Result<()> {
     let dayfile = get_dayfile(cli)?;
@@ -135,11 +159,11 @@ fn render(dayfile: &DayFile, cli: &Cli) -> Result<(), Error> {
             return Ok(());
         }
 
-        for (idx, i) in dayfile.items.iter().enumerate() {
+        for (_, i) in dayfile.items.iter().enumerate() {
             writeln!(
                 &mut stdout,
-                "{}) [{}]\t{}",
-                idx + 1,
+                "{} [{}]\t{}",
+                i.id,
                 item_completion_status(&i),
                 i.text
             )?;

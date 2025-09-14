@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
+use nanoid::nanoid;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "lowercase")]
@@ -26,7 +26,7 @@ pub struct Item {
 impl Item {
     pub fn new(text: String, next_idx: u32) -> Self {
         Item {
-            id: Uuid::new_v4().to_string(),
+            id: nanoid!(6),
             text: text,
             created_at: Utc::now(),
             done_at: None,
