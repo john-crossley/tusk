@@ -16,7 +16,7 @@ pub fn tusk_data_root() -> PathBuf {
     }
 }
 
-pub fn resolve_day_file_path(date: &NaiveDate, base_dir: Option<&Path>) -> PathBuf {
+pub fn resolve_day_file_path(date: &NaiveDate, base_dir: Option<&Path>, verbose: bool) -> PathBuf {
     let year = NaiveDate::year(date);
     let month = NaiveDate::month(date);
 
@@ -27,6 +27,10 @@ pub fn resolve_day_file_path(date: &NaiveDate, base_dir: Option<&Path>) -> PathB
     working_dir.push(format!("{:04}", year));
     working_dir.push(format!("{:02}", month));
     working_dir.push(format!("{}.json", date));
+
+    if verbose {
+        eprintln!("[🐘] File: {}", working_dir.display())
+    }
 
     working_dir
 }
