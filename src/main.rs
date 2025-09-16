@@ -70,6 +70,9 @@ enum Commands {
     #[command(name = "done", about = "Mark an item done by its index")]
     Done { index: usize },
 
+    #[command(name = "undone", about = "Mark an item undone by its index")]
+    Undone { index: usize },
+
     #[command(name = "rm", about = "Remove an item from your list.")]
     Rm { index: usize },
 }
@@ -87,54 +90,13 @@ fn dispatch(cli: &Cli) -> io::Result<()> {
     match cli.command.as_ref() {
         Some(Commands::Add { text }) => run_add(&cli, text),
         Some(Commands::Ls {}) | None => run_ls(&cli),
-        Some(Commands::Done { index }) => run_done(&cli, *index),
+        Some(Commands::Done { index }) => run_done(&cli, *index, true),
+        Some(Commands::Undone { index }) => run_done(&cli, *index, false),
         Some(Commands::Rm { index }) => run_rm(&cli, *index),
     }
 }
 
 // command handler functions
-
-fn validate_index(i: usize, len: usize) -> io::Result<usize> {
-    if i == 0 || i > len {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            format!("item at index {} does not exist.", i),
-        ));
-    }
-
-    Ok(i - 1)
-}
-
-fn run_rm(cli: &Cli, idx: usize) -> io::Result<()> {
-    let (date, path) = current_day_context(cli)?;
-    let mut dayfile = load_or_create_dayfile(&path, date)?;
-
-    let pos = validate_index(idx, dayfile.items.len())?;
-    _ = &mut dayfile.items.remove(pos);
-    save_dayfile(&path, &dayfile)?;
-
-    Ok(())
-}
-
-fn run_done(cli: &Cli, idx: usize) -> io::Result<()> {
-    let (date, path) = current_day_context(cli)?;
-    let mut dayfile = load_or_create_dayfile(&path, date)?;
-
-    let pos = validate_index(idx, dayfile.items.len())?;
-    let item = &mut dayfile.items[pos];
-    item.done_at = item.done_at.take().or(Some(Utc::now()));
-    save_dayfile(&path, &dayfile)?;
-
-    Ok(())
-}
-
-fn run_ls(cli: &Cli) -> io::Result<()> {
-    let (date, path) = current_day_context(cli)?;
-    let dayfile = load_or_create_dayfile(&path, date)?;
-    render(&dayfile, cli.json, cli.verbose)?;
-
-    Ok(())
-}
 
 fn run_add(cli: &Cli, text: &str) -> Result<(), Error> {
     if text.trim().is_empty() {
@@ -160,7 +122,49 @@ fn run_add(cli: &Cli, text: &str) -> Result<(), Error> {
     Ok(())
 }
 
+fn run_ls(cli: &Cli) -> io::Result<()> {
+    let (date, path) = current_day_context(cli)?;
+    let dayfile = load_or_create_dayfile(&path, date)?;
+    render(&dayfile, cli.json, cli.verbose)?;
+
+    Ok(())
+}
+
+fn run_done(cli: &Cli, idx: usize, mark_done: bool) -> io::Result<()> {
+    let (date, path) = current_day_context(cli)?;
+    let mut dayfile = load_or_create_dayfile(&path, date)?;
+
+    let pos = validate_index(idx, dayfile.items.len())?;
+    let item = &mut dayfile.items[pos];
+    item.done_at = if mark_done { item.done_at.take().or(Some(Utc::now())) } else { None };
+    save_dayfile(&path, &dayfile)?;
+
+    Ok(())
+}
+
+fn run_rm(cli: &Cli, idx: usize) -> io::Result<()> {
+    let (date, path) = current_day_context(cli)?;
+    let mut dayfile = load_or_create_dayfile(&path, date)?;
+
+    let pos = validate_index(idx, dayfile.items.len())?;
+    _ = &mut dayfile.items.remove(pos);
+    save_dayfile(&path, &dayfile)?;
+
+    Ok(())
+}
+
 // helper functions
+
+fn validate_index(i: usize, len: usize) -> io::Result<usize> {
+    if i == 0 || i > len {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("item at index {} does not exist.", i),
+        ));
+    }
+
+    Ok(i - 1)
+}
 
 fn parse_ymd(d: &str) -> Result<NaiveDate, String> {
     NaiveDate::parse_from_str(d, "%Y-%m-%d")
