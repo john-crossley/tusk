@@ -69,6 +69,9 @@ enum Commands {
 
     #[command(name = "done", about = "Mark an item done by its index")]
     Done { index: usize },
+
+    #[command(name = "rm", about = "Remove an item from your list.")]
+    Rm { index: usize },
 }
 
 fn main() {
@@ -85,29 +88,44 @@ fn dispatch(cli: &Cli) -> io::Result<()> {
         Some(Commands::Add { text }) => run_add(&cli, text),
         Some(Commands::Ls {}) | None => run_ls(&cli),
         Some(Commands::Done { index }) => run_done(&cli, *index),
+        Some(Commands::Rm { index }) => run_rm(&cli, *index),
     }
 }
 
 // command handler functions
 
+fn validate_index(i: usize, len: usize) -> io::Result<usize> {
+    if i == 0 || i > len {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("item at index {} does not exist.", i),
+        ));
+    }
+
+    Ok(i - 1)
+}
+
+fn run_rm(cli: &Cli, idx: usize) -> io::Result<()> {
+    let (date, path) = current_day_context(cli)?;
+    let mut dayfile = load_or_create_dayfile(&path, date)?;
+
+    let pos = validate_index(idx, dayfile.items.len())?;
+    _ = &mut dayfile.items.remove(pos);
+    save_dayfile(&path, &dayfile)?;
+
+    Ok(())
+}
+
 fn run_done(cli: &Cli, idx: usize) -> io::Result<()> {
     let (date, path) = current_day_context(cli)?;
     let mut dayfile = load_or_create_dayfile(&path, date)?;
 
-    if idx > 0
-        && let Some(item) = dayfile.items.get_mut(idx - 1)
-    {
-        item.done_at = item.done_at.take().or(Some(Utc::now()));
+    let pos = validate_index(idx, dayfile.items.len())?;
+    let item = &mut dayfile.items[pos];
+    item.done_at = item.done_at.take().or(Some(Utc::now()));
+    save_dayfile(&path, &dayfile)?;
 
-        save_dayfile(&path, &dayfile)?;
-
-        run_ls(cli)
-    } else {
-        Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            format!("index not found '{}'", idx),
-        ))
-    }
+    Ok(())
 }
 
 fn run_ls(cli: &Cli) -> io::Result<()> {
@@ -138,7 +156,6 @@ fn run_add(cli: &Cli, text: &str) -> Result<(), Error> {
     dayfile.items.push(new_item);
 
     save_dayfile(&path, &dayfile)?;
-    render(&dayfile, cli.json, cli.verbose)?;
 
     Ok(())
 }
