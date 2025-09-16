@@ -1,7 +1,7 @@
 use std::io::{self, Error, Write};
 use colored::Colorize;
 
-use crate::{models::dayfile::DayFile};
+use crate::models::{dayfile::DayFile, item::Item};
 
 pub fn render(dayfile: &DayFile, json: bool, verbose: bool) -> Result<(), Error> {
     let mut stdout = io::stdout().lock();
@@ -9,7 +9,6 @@ pub fn render(dayfile: &DayFile, json: bool, verbose: bool) -> Result<(), Error>
     if json {
         serde_json::to_writer_pretty(&mut stdout, &dayfile)?;
         writeln!(&mut stdout)?;
-        stdout.flush()?;
         return Ok(());
     }
 
@@ -25,7 +24,6 @@ pub fn render(dayfile: &DayFile, json: bool, verbose: bool) -> Result<(), Error>
             "tusk add \"Plant more trees 🌳\"".green().bold()
         )?;
 
-        stdout.flush()?;
         return Ok(());
     }
 
@@ -53,7 +51,18 @@ pub fn render(dayfile: &DayFile, json: bool, verbose: bool) -> Result<(), Error>
         completed
     )?;
 
-    stdout.flush()?;
+    Ok(())
+}
+
+pub fn render_summary(item: &Item, json: bool) -> Result<(), Error> {
+    let mut stdout = io::stdout().lock();
+
+    if json {
+        serde_json::to_writer_pretty(&mut stdout, &item)?;
+        writeln!(&mut stdout)?;
+    } else {
+        writeln!(&mut stdout, "Added #{} {}", item.index, item.text)?;
+    }
 
     Ok(())
 }

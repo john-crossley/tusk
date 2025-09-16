@@ -1,6 +1,5 @@
 use std::{
-    io::{self, Error},
-    path::PathBuf,
+    io::{self, Error}, path::PathBuf
 };
 
 use chrono::{NaiveDate, Utc};
@@ -14,7 +13,7 @@ use crate::{
     utils::{
         dates::today_date,
         files::{load_or_create_dayfile, resolve_day_file_path, save_dayfile},
-        render::render,
+        render::{render, render_summary},
     },
 };
 
@@ -111,13 +110,17 @@ fn run_add(cli: &Cli, text: &str) -> Result<(), Error> {
 
     let next_idx: u32 = (dayfile.items.len() + 1)
         .try_into()
-        .map_err(|_| io::Error::new(io::ErrorKind::Other, "I wasn't built for this many items."))?;
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "I wasn't built for this many items."))?;
 
     let new_item = Item::new(text.to_owned(), next_idx);
 
     dayfile.items.push(new_item);
 
     save_dayfile(&path, &dayfile)?;
+
+    let added = dayfile.items.len();
+    let item = &dayfile.items[added - 1];
+    render_summary(&item, cli.json)?;
 
     Ok(())
 }
