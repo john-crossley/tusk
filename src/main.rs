@@ -112,15 +112,13 @@ fn run_add(cli: &Cli, text: &str) -> Result<(), Error> {
         .try_into()
         .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "I wasn't built for this many items."))?;
 
-    let new_item = Item::new(text.to_owned(), next_idx);
-
-    dayfile.items.push(new_item);
+    dayfile.items.push(Item::new(text.to_owned(), next_idx));
 
     save_dayfile(&path, &dayfile)?;
 
-    let added = dayfile.items.len();
-    let item = &dayfile.items[added - 1];
-    render_summary(&item, cli.json)?;
+    if let Some(item) = dayfile.items.last() {
+        render_summary(item, cli.json)?;
+    }
 
     Ok(())
 }
