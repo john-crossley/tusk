@@ -1,4 +1,4 @@
-# Tusk – daily CLI todos with zero friction
+# 🦣 Tusk – daily CLI todos with zero friction
 
 ## Philosophy
 - No args = operate on **today**.

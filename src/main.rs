@@ -74,6 +74,9 @@ enum Commands {
 
     #[command(name = "rm", about = "Remove an item from your list.")]
     Rm { index: usize },
+
+    #[command(name = "edit", about = "Edit an item from your list.")]
+    Edit { index: usize, text: String },
 }
 
 fn main() {
@@ -92,19 +95,14 @@ fn dispatch(cli: &Cli) -> io::Result<()> {
         Some(Commands::Done { index }) => run_done(&cli, *index, true),
         Some(Commands::Undone { index }) => run_done(&cli, *index, false),
         Some(Commands::Rm { index }) => run_rm(&cli, *index),
+        Some(Commands::Edit { index, text }) => run_edit(&cli, *index, text),
     }
 }
 
 // command handler functions
 
 fn run_add(cli: &Cli, text: &str) -> Result<(), Error> {
-    if text.trim().is_empty() {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "Oops, did you forget to add some text?",
-        ));
-    }
-
+    let new_text = sanitise_str(text)?;
     let (date, path) = current_day_context(cli)?;
     let mut dayfile = load_or_create_dayfile(&path, date)?;
 
@@ -112,7 +110,7 @@ fn run_add(cli: &Cli, text: &str) -> Result<(), Error> {
         .try_into()
         .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "I wasn't built for this many items."))?;
 
-    dayfile.items.push(Item::new(text.to_owned(), next_idx));
+    dayfile.items.push(Item::new(new_text, next_idx));
 
     save_dayfile(&path, &dayfile)?;
 
@@ -154,6 +152,21 @@ fn run_rm(cli: &Cli, idx: usize) -> io::Result<()> {
     Ok(())
 }
 
+fn run_edit(cli: &Cli, idx: usize, text: &str) -> io::Result<()> {
+    let new_text = sanitise_str(text)?;
+    let (date, path) = current_day_context(cli)?;
+    let mut dayfile = load_or_create_dayfile(&path, date)?;
+
+    let pos = validate_index(idx, dayfile.items.len())?;
+    
+    if let Some(item) = dayfile.items.get_mut(pos) {
+        item.text = new_text; 
+        save_dayfile(&path, &dayfile)?;
+    }
+
+    Ok(())
+}
+
 // helper functions
 
 fn validate_index(i: usize, len: usize) -> io::Result<usize> {
@@ -183,4 +196,16 @@ fn current_day_context(cli: &Cli) -> Result<(NaiveDate, PathBuf), Error> {
     )?;
 
     return Ok((date, path));
+}
+
+fn sanitise_str(text: &str) -> io::Result<String> {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Oops, did you forget to add some text?",
+        ))
+    } else {
+        Ok(trimmed.to_owned())
+    }
 }

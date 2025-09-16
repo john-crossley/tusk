@@ -12,6 +12,7 @@ pub fn render(dayfile: &DayFile, json: bool, verbose: bool) -> Result<(), Error>
         return Ok(());
     }
 
+    writeln!(&mut stdout)?;
     let title = format!("Tasks for: {}", dayfile.date.format("%a %d %b %Y"));
     writeln!(&mut stdout, "{}", title.bold())?;
     writeln!(&mut stdout, "{}", repeat_char('-', title.len()))?;
