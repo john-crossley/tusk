@@ -146,9 +146,10 @@ fn run_ls(cli: &Cli, tags: &Option<Vec<String>>) -> io::Result<()> {
     let mut dayfile = load_or_create_dayfile(&path, date)?;
 
     if let Some(tags) = tags {
-        dayfile
-            .items
-            .retain(|i| tags.iter().all(|t| i.tags.contains(t)));
+        dayfile.items.retain(|i| {
+            tags.iter()
+                .all(|t| i.tags.iter().any(|it| it.eq_ignore_ascii_case(t)))
+        });
     }
 
     render(
@@ -185,7 +186,7 @@ fn run_rm(cli: &Cli, idx: usize) -> io::Result<()> {
     let mut dayfile = load_or_create_dayfile(&path, date)?;
 
     let pos = validate_index(idx, dayfile.items.len())?;
-    _ = &mut dayfile.items.remove(pos);
+    let _ = &mut dayfile.items.remove(pos);
     save_dayfile(&path, &dayfile)?;
 
     Ok(())

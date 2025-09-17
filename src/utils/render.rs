@@ -122,7 +122,7 @@ pub fn render(dayfile: &DayFile, opts: RenderOpts) -> Result<(), Error> {
         };
 
         let space_after_id = if short_id.is_empty() { "" } else { " " };
-        let line = format!("{n:>2}. {boxy} {short_id}{space_after_id}{} ", i.text);
+        let line = format!("{n:>2}. {boxy} {short_id}{space_after_id}{} ", format_text(&i.text));
         
         let priority = match i.priority {
             ItemPriority::Low => "".normal(),
@@ -151,6 +151,10 @@ pub fn render(dayfile: &DayFile, opts: RenderOpts) -> Result<(), Error> {
     )?;
 
     Ok(())
+}
+
+fn format_text(s: &String) -> &str {
+    s
 }
 
 pub fn render_summary(item: &Item, json: bool, no_colour: bool) -> io::Result<()> {
