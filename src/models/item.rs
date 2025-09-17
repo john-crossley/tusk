@@ -24,14 +24,14 @@ pub struct Item {
 }
 
 impl Item {
-    pub fn new(text: String, next_idx: u32) -> Self {
+    pub fn new(text: String, priority: ItemPriority, tags: Vec<String>, next_idx: u32) -> Self {
         Item {
             id: nanoid!(6),
             text: text,
             created_at: Utc::now(),
             done_at: None,
-            priority: ItemPriority::Low,
-            tags: Vec::new(),
+            priority,
+            tags,
             due: None,
             notes: None,
             index: next_idx,
