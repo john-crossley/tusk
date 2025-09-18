@@ -1,7 +1,10 @@
 use colored::{ColoredString, Colorize};
 use std::io::{self, Error, IsTerminal, Write};
 
-use crate::models::{dayfile::DayFile, item::{Item, ItemPriority}};
+use crate::models::{
+    dayfile::DayFile,
+    item::{Item, ItemPriority},
+};
 
 pub struct RenderOpts {
     pub json: bool,
@@ -60,7 +63,7 @@ impl Theme {
         let t = match p {
             ItemPriority::High => "!high",
             ItemPriority::Medium => "!med",
-            ItemPriority::Low => "!low"
+            ItemPriority::Low => "!low",
         };
 
         if !self.color {
@@ -70,7 +73,7 @@ impl Theme {
         match p {
             ItemPriority::High => t.red().bold(),
             ItemPriority::Medium => t.yellow().bold(),
-            ItemPriority::Low => t.normal()
+            ItemPriority::Low => t.normal(),
         }
     }
 }
@@ -122,11 +125,14 @@ pub fn render(dayfile: &DayFile, opts: RenderOpts) -> Result<(), Error> {
         };
 
         let space_after_id = if short_id.is_empty() { "" } else { " " };
-        let line = format!("{n:>2}. {boxy} {short_id}{space_after_id}{} ", format_text(&i.text));
-        
+        let line = format!(
+            "{n:>2}. {boxy} {short_id}{space_after_id}{} ",
+            format_text(&i.text, &theme)
+        );
+
         let priority = match i.priority {
             ItemPriority::Low => "".normal(),
-            _ => theme.priority(&i.priority)
+            _ => theme.priority(&i.priority),
         };
 
         if i.done_at.is_some() {
@@ -153,8 +159,17 @@ pub fn render(dayfile: &DayFile, opts: RenderOpts) -> Result<(), Error> {
     Ok(())
 }
 
-fn format_text(s: &String) -> &str {
-    s
+fn format_text(s: &String, theme: &Theme) -> String {
+    s.split_whitespace()
+        .map(|w| {
+            if w.starts_with("#") {
+                theme.info(w).to_string()
+            } else {
+                w.normal().to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 pub fn render_summary(item: &Item, json: bool, no_colour: bool) -> io::Result<()> {
