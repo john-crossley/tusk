@@ -1,10 +1,12 @@
 use std::{
-    io::{self, Error},
-    path::PathBuf,
+    env,
+    io::{self, Error, Write},
+    path::PathBuf, process::Command,
 };
 
 use chrono::{NaiveDate, Utc};
 use clap::{Parser, Subcommand};
+use tempfile::NamedTempFile;
 
 mod models;
 mod utils;
@@ -73,6 +75,10 @@ enum Commands {
         /// The priority of the item being added.
         #[arg(short = 'p', long = "priority")]
         priority: Option<String>,
+
+        /// Add a note to this item, opens in an external editor
+        #[arg(short = 'n', long = "note")]
+        note: bool,
     },
 
     #[command(name = "done", about = "Mark an item done by its index")]
@@ -99,7 +105,11 @@ fn main() {
 
 fn dispatch(cli: &Cli) -> io::Result<()> {
     match cli.command.as_ref() {
-        Some(Commands::Add { text, priority }) => run_add(&cli, text, priority.as_deref()),
+        Some(Commands::Add {
+            text,
+            priority,
+            note,
+        }) => run_add(&cli, text, priority.as_deref(), *note),
         Some(Commands::Ls { tags }) => run_ls(&cli, tags),
         Some(Commands::Done { index }) => run_done(&cli, *index, true),
         Some(Commands::Undone { index }) => run_done(&cli, *index, false),
@@ -111,7 +121,23 @@ fn dispatch(cli: &Cli) -> io::Result<()> {
 
 // command handler functions
 
-fn run_add(cli: &Cli, text: &str, priority: Option<&str>) -> Result<(), Error> {
+fn edit_in_editor(initial: &str) -> io::Result<String> {
+    let mut tmp = NamedTempFile::new()?;
+    writeln!(tmp, "{}", initial)?;
+
+    let editor = env::var("EDITOR")
+        .or_else(|_| env::var("VISUAL"))
+        .unwrap_or_else(|_| String::from("nano"));
+
+    Command::new(editor)
+        .arg(tmp.path())
+        .status()?;
+
+    let contents = std::fs::read_to_string(tmp.path())?;
+    Ok(contents)
+}
+
+fn run_add(cli: &Cli, text: &str, priority: Option<&str>, note: bool) -> Result<(), Error> {
     let new_text = sanitise_str(text)?;
     let tags = extract_tags(text);
 
@@ -125,11 +151,20 @@ fn run_add(cli: &Cli, text: &str, priority: Option<&str>) -> Result<(), Error> {
         )
     })?;
 
+
+
+    let notes = if note {
+        Some(edit_in_editor("# Notes")?)
+    } else {
+        None
+    };
+
     dayfile.items.push(Item::new(
         new_text,
         get_item_priority(priority),
         tags,
         next_idx,
+        notes
     ));
 
     save_dayfile(&path, &dayfile)?;

@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
 use nanoid::nanoid;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "lowercase")]
@@ -24,7 +24,13 @@ pub struct Item {
 }
 
 impl Item {
-    pub fn new(text: String, priority: ItemPriority, tags: Vec<String>, next_idx: u32) -> Self {
+    pub fn new(
+        text: String,
+        priority: ItemPriority,
+        tags: Vec<String>,
+        next_idx: u32,
+        notes: Option<String>,
+    ) -> Self {
         Item {
             id: nanoid!(6),
             text: text,
@@ -33,7 +39,7 @@ impl Item {
             priority,
             tags,
             due: None,
-            notes: None,
+            notes,
             index: next_idx,
         }
     }
