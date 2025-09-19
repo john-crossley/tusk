@@ -11,7 +11,7 @@
 
     tusk [GLOBAL OPTIONS] <SUBCOMMAND> [ARGS]
     tusk [GLOBAL OPTIONS]            # shorthand for `tusk ls` (today)
-    tusk "Buy milk #home !low"       # shorthand for `tusk add ...`
+    tusk "Buy oat milk #home !low"       # shorthand for `tusk add ...`
 
 ### Global options
 - --date YYYY-MM-DD · Act on a specific date (default: today)
