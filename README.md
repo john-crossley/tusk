@@ -120,6 +120,11 @@ t show 1
 t ls --tag work
 ```
 
+### Screenshots
+
+![Tusk demo1](assets/screen1.png)
+![Tusk demo2](assets/screen2.png)
+
 ### Data storage
 
 Tusk stores your todos as a single JSON file in a date based directory structure. Bt default, this lives under your systems app data dir, eg:
