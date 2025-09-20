@@ -76,8 +76,8 @@ enum Commands {
         priority: Option<String>,
 
         /// Add a note to this item, opens in an external editor
-        #[arg(short = 'n', long = "note")]
-        note: bool,
+        #[arg(short = 'n', long = "notes")]
+        attach_notes: bool,
     },
 
     #[command(name = "done", about = "Mark an item done by its index")]
@@ -90,7 +90,13 @@ enum Commands {
     Rm { index: usize },
 
     #[command(name = "edit", about = "Edit an item from your list.")]
-    Edit { index: usize, text: String },
+    Edit {
+        index: usize,
+        text: Option<String>,
+        /// Add a note to this item, opens in an external editor
+        #[arg(short = 'n', long = "notes")]
+        attach_notes: bool,
+    },
 
     #[command(name = "show", about = "Show an item by its index.")]
     Show { index: usize },
@@ -110,13 +116,17 @@ fn dispatch(cli: &Cli) -> io::Result<()> {
         Some(Commands::Add {
             text,
             priority,
-            note,
-        }) => run_add(&cli, text, priority.as_deref(), *note),
+            attach_notes,
+        }) => run_add(&cli, text, priority.as_deref(), attach_notes),
         Some(Commands::Ls { tags }) => run_ls(&cli, tags),
         Some(Commands::Done { index }) => run_done(&cli, *index, true),
         Some(Commands::Undone { index }) => run_done(&cli, *index, false),
         Some(Commands::Rm { index }) => run_rm(&cli, *index),
-        Some(Commands::Edit { index, text }) => run_edit(&cli, *index, text),
+        Some(Commands::Edit {
+            index,
+            text,
+            attach_notes,
+        }) => run_edit(&cli, *index, text, attach_notes),
         Some(Commands::Show { index }) => run_show(&cli, *index),
         None => run_ls(&cli, &None),
     }
@@ -124,7 +134,12 @@ fn dispatch(cli: &Cli) -> io::Result<()> {
 
 // command handler functions
 
-fn run_add(cli: &Cli, text: &str, priority: Option<&str>, note: bool) -> Result<(), Error> {
+fn run_add(
+    cli: &Cli,
+    text: &str,
+    priority: Option<&str>,
+    attach_notes: &bool,
+) -> Result<(), Error> {
     let new_text = sanitise_str(text)?;
     let tags = extract_tags(text);
 
@@ -138,7 +153,7 @@ fn run_add(cli: &Cli, text: &str, priority: Option<&str>, note: bool) -> Result<
         )
     })?;
 
-    let notes = if note {
+    let notes = if *attach_notes {
         Some(edit_in_editor("# Notes")?)
     } else {
         None
@@ -220,15 +235,25 @@ fn run_rm(cli: &Cli, idx: usize) -> io::Result<()> {
     Ok(())
 }
 
-fn run_edit(cli: &Cli, idx: usize, text: &str) -> io::Result<()> {
-    let new_text = sanitise_str(text)?;
+fn run_edit(cli: &Cli, idx: usize, text: &Option<String>, attach_notes: &bool) -> io::Result<()> {
     let (date, path) = current_day_context(cli)?;
     let mut dayfile = load_or_create_dayfile(&path, date)?;
 
     let pos = validate_index(idx, dayfile.items.len())?;
 
+    let notes = if *attach_notes {
+        Some(edit_in_editor("# Notes")?)
+    } else {
+        None
+    };
+
     if let Some(item) = dayfile.items.get_mut(pos) {
-        item.text = new_text;
+        if let Some(s) = text {
+            item.text = sanitise_str(s)?;
+        }
+
+        item.notes = notes;
+
         save_dayfile(&path, &dayfile)?;
     }
 

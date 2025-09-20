@@ -182,12 +182,9 @@ pub fn render_summary(item: &Item, opts: RenderOpts) -> io::Result<()> {
     }
 
     let theme = Theme::new(opts.no_color);
-    let msg = format!(
-        "Added  {}. {}",
-        format!("{}", item.index).to_string(),
-        &item.text
-    );
-    writeln!(&mut out, "{}", theme.ok(&msg))?;
+    
+    writeln!(&mut out, "{}", format_text(&item.text, &theme))?;
+
     Ok(())
 }
 
