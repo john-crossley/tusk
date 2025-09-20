@@ -13,6 +13,7 @@ use crate::{
     models::item::{Item, ItemPriority},
     utils::{
         dates::today_date,
+        editor::edit_in_editor,
         files::{load_or_create_dayfile, resolve_day_file_path, save_dayfile},
         render::{RenderOpts, render, render_summary},
     },
@@ -73,6 +74,10 @@ enum Commands {
         /// The priority of the item being added.
         #[arg(short = 'p', long = "priority")]
         priority: Option<String>,
+
+        /// Add a note to this item, opens in an external editor
+        #[arg(short = 'n', long = "notes")]
+        attach_notes: bool,
     },
 
     #[command(name = "done", about = "Mark an item done by its index")]
@@ -85,7 +90,16 @@ enum Commands {
     Rm { index: usize },
 
     #[command(name = "edit", about = "Edit an item from your list.")]
-    Edit { index: usize, text: String },
+    Edit {
+        index: usize,
+        text: Option<String>,
+        /// Add a note to this item, opens in an external editor
+        #[arg(short = 'n', long = "notes")]
+        attach_notes: bool,
+    },
+
+    #[command(name = "show", about = "Show an item by its index.")]
+    Show { index: usize },
 }
 
 fn main() {
@@ -99,19 +113,33 @@ fn main() {
 
 fn dispatch(cli: &Cli) -> io::Result<()> {
     match cli.command.as_ref() {
-        Some(Commands::Add { text, priority }) => run_add(&cli, text, priority.as_deref()),
+        Some(Commands::Add {
+            text,
+            priority,
+            attach_notes,
+        }) => run_add(&cli, text, priority.as_deref(), attach_notes),
         Some(Commands::Ls { tags }) => run_ls(&cli, tags),
         Some(Commands::Done { index }) => run_done(&cli, *index, true),
         Some(Commands::Undone { index }) => run_done(&cli, *index, false),
         Some(Commands::Rm { index }) => run_rm(&cli, *index),
-        Some(Commands::Edit { index, text }) => run_edit(&cli, *index, text),
+        Some(Commands::Edit {
+            index,
+            text,
+            attach_notes,
+        }) => run_edit(&cli, *index, text, attach_notes),
+        Some(Commands::Show { index }) => run_show(&cli, *index),
         None => run_ls(&cli, &None),
     }
 }
 
 // command handler functions
 
-fn run_add(cli: &Cli, text: &str, priority: Option<&str>) -> Result<(), Error> {
+fn run_add(
+    cli: &Cli,
+    text: &str,
+    priority: Option<&str>,
+    attach_notes: &bool,
+) -> Result<(), Error> {
     let new_text = sanitise_str(text)?;
     let tags = extract_tags(text);
 
@@ -125,17 +153,32 @@ fn run_add(cli: &Cli, text: &str, priority: Option<&str>) -> Result<(), Error> {
         )
     })?;
 
+    let notes = if *attach_notes {
+        Some(edit_in_editor("# Notes")?)
+    } else {
+        None
+    };
+
     dayfile.items.push(Item::new(
         new_text,
         get_item_priority(priority),
         tags,
         next_idx,
+        notes,
     ));
 
     save_dayfile(&path, &dayfile)?;
 
     if let Some(item) = dayfile.items.last() {
-        render_summary(item, cli.json, cli.no_colour)?;
+        render_summary(
+            item,
+            RenderOpts {
+                json: cli.json,
+                verbose: cli.verbose,
+                no_color: cli.no_colour,
+                vault_name: None,
+            },
+        )?;
     }
 
     Ok(())
@@ -192,16 +235,46 @@ fn run_rm(cli: &Cli, idx: usize) -> io::Result<()> {
     Ok(())
 }
 
-fn run_edit(cli: &Cli, idx: usize, text: &str) -> io::Result<()> {
-    let new_text = sanitise_str(text)?;
+fn run_edit(cli: &Cli, idx: usize, text: &Option<String>, attach_notes: &bool) -> io::Result<()> {
     let (date, path) = current_day_context(cli)?;
     let mut dayfile = load_or_create_dayfile(&path, date)?;
 
     let pos = validate_index(idx, dayfile.items.len())?;
 
+    let notes = if *attach_notes {
+        Some(edit_in_editor("# Notes")?)
+    } else {
+        None
+    };
+
     if let Some(item) = dayfile.items.get_mut(pos) {
-        item.text = new_text;
+        if let Some(s) = text {
+            item.text = sanitise_str(s)?;
+        }
+
+        item.notes = notes;
+
         save_dayfile(&path, &dayfile)?;
+    }
+
+    Ok(())
+}
+
+fn run_show(cli: &Cli, idx: usize) -> io::Result<()> {
+    let (date, path) = current_day_context(cli)?;
+    let mut dayfile = load_or_create_dayfile(&path, date)?;
+    let pos = validate_index(idx, dayfile.items.len())?;
+
+    if let Some(item) = dayfile.items.get_mut(pos) {
+        render_summary(
+            item,
+            RenderOpts {
+                json: cli.json,
+                verbose: cli.verbose,
+                no_color: cli.no_colour,
+                vault_name: None,
+            },
+        )?;
     }
 
     Ok(())

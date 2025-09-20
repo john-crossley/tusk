@@ -172,22 +172,69 @@ fn format_text(s: &String, theme: &Theme) -> String {
         .join(" ")
 }
 
-pub fn render_summary(item: &Item, json: bool, no_colour: bool) -> io::Result<()> {
+pub fn render_summary(item: &Item, opts: RenderOpts) -> io::Result<()> {
     let mut out = io::stdout().lock();
 
-    if json {
+    if opts.json {
         serde_json::to_writer_pretty(&mut out, &item)?;
         writeln!(&mut out)?;
         return Ok(());
     }
 
-    let theme = Theme::new(no_colour);
-    let msg = format!(
-        "Added  {}. {}",
-        format!("{}", item.index).to_string(),
-        &item.text
-    );
-    writeln!(&mut out, "{}", theme.ok(&msg))?;
+    let theme = Theme::new(opts.no_color);
+
+    // Header
+    writeln!(
+        &mut out,
+        "{}  {}",
+        theme.info(&format!("#{}", item.index)),
+        format_text(&item.text, &theme)
+    )?;
+
+    // Priority
+    writeln!(
+        &mut out,
+        "    {} {}",
+        theme.dim("Priority:"),
+        theme.priority(&item.priority)
+    )?;
+
+    // Tags
+    if !item.tags.is_empty() {
+        let tags = item
+            .tags
+            .iter()
+            .map(|t| format!("#{}", t))
+            .collect::<Vec<_>>()
+            .join("  ");
+
+        writeln!(&mut out, "    {} {}", theme.dim("Tags:"), tags)?;
+    }
+
+    // Created
+    writeln!(
+        &mut out,
+        "    {} {}",
+        theme.dim("Created:"),
+        item.created_at.format("%Y-%m-%d %H:%M")
+    )?;
+
+    // Done
+    let done_s = match &item.done_at {
+        Some(ts) => ts.format("%Y=%m-%d %H:%M").to_string(),
+        None => "not yet".into()
+    };
+
+    writeln!(&mut out, "    {} {}", theme.dim("Done:"), done_s)?;
+
+    // Notes
+    if let Some(n) = &item.notes {
+        writeln!(&mut out, "    {} ", theme.dim("Notes:"))?;
+        for line in n.lines() {
+            writeln!(&mut out, "      {}", line)?;
+        }
+    }
+
     Ok(())
 }
 
