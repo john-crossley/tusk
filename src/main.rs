@@ -1,12 +1,10 @@
 use std::{
-    env,
-    io::{self, Error, Write},
-    path::PathBuf, process::Command,
+    io::{self, Error},
+    path::PathBuf,
 };
 
 use chrono::{NaiveDate, Utc};
 use clap::{Parser, Subcommand};
-use tempfile::NamedTempFile;
 
 mod models;
 mod utils;
@@ -15,6 +13,7 @@ use crate::{
     models::item::{Item, ItemPriority},
     utils::{
         dates::today_date,
+        editor::edit_in_editor,
         files::{load_or_create_dayfile, resolve_day_file_path, save_dayfile},
         render::{RenderOpts, render, render_summary},
     },
@@ -92,6 +91,9 @@ enum Commands {
 
     #[command(name = "edit", about = "Edit an item from your list.")]
     Edit { index: usize, text: String },
+
+    #[command(name = "show", about = "Show an item by its index.")]
+    Show { index: usize },
 }
 
 fn main() {
@@ -115,27 +117,12 @@ fn dispatch(cli: &Cli) -> io::Result<()> {
         Some(Commands::Undone { index }) => run_done(&cli, *index, false),
         Some(Commands::Rm { index }) => run_rm(&cli, *index),
         Some(Commands::Edit { index, text }) => run_edit(&cli, *index, text),
+        Some(Commands::Show { index }) => run_show(&cli, *index),
         None => run_ls(&cli, &None),
     }
 }
 
 // command handler functions
-
-fn edit_in_editor(initial: &str) -> io::Result<String> {
-    let mut tmp = NamedTempFile::new()?;
-    writeln!(tmp, "{}", initial)?;
-
-    let editor = env::var("EDITOR")
-        .or_else(|_| env::var("VISUAL"))
-        .unwrap_or_else(|_| String::from("nano"));
-
-    Command::new(editor)
-        .arg(tmp.path())
-        .status()?;
-
-    let contents = std::fs::read_to_string(tmp.path())?;
-    Ok(contents)
-}
 
 fn run_add(cli: &Cli, text: &str, priority: Option<&str>, note: bool) -> Result<(), Error> {
     let new_text = sanitise_str(text)?;
@@ -151,8 +138,6 @@ fn run_add(cli: &Cli, text: &str, priority: Option<&str>, note: bool) -> Result<
         )
     })?;
 
-
-
     let notes = if note {
         Some(edit_in_editor("# Notes")?)
     } else {
@@ -164,13 +149,21 @@ fn run_add(cli: &Cli, text: &str, priority: Option<&str>, note: bool) -> Result<
         get_item_priority(priority),
         tags,
         next_idx,
-        notes
+        notes,
     ));
 
     save_dayfile(&path, &dayfile)?;
 
     if let Some(item) = dayfile.items.last() {
-        render_summary(item, cli.json, cli.no_colour)?;
+        render_summary(
+            item,
+            RenderOpts {
+                json: cli.json,
+                verbose: cli.verbose,
+                no_color: cli.no_colour,
+                vault_name: None,
+            },
+        )?;
     }
 
     Ok(())
@@ -237,6 +230,26 @@ fn run_edit(cli: &Cli, idx: usize, text: &str) -> io::Result<()> {
     if let Some(item) = dayfile.items.get_mut(pos) {
         item.text = new_text;
         save_dayfile(&path, &dayfile)?;
+    }
+
+    Ok(())
+}
+
+fn run_show(cli: &Cli, idx: usize) -> io::Result<()> {
+    let (date, path) = current_day_context(cli)?;
+    let mut dayfile = load_or_create_dayfile(&path, date)?;
+    let pos = validate_index(idx, dayfile.items.len())?;
+
+    if let Some(item) = dayfile.items.get_mut(pos) {
+        render_summary(
+            item,
+            RenderOpts {
+                json: cli.json,
+                verbose: cli.verbose,
+                no_color: cli.no_colour,
+                vault_name: None,
+            },
+        )?;
     }
 
     Ok(())

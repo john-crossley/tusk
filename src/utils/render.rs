@@ -172,16 +172,16 @@ fn format_text(s: &String, theme: &Theme) -> String {
         .join(" ")
 }
 
-pub fn render_summary(item: &Item, json: bool, no_colour: bool) -> io::Result<()> {
+pub fn render_summary(item: &Item, opts: RenderOpts) -> io::Result<()> {
     let mut out = io::stdout().lock();
 
-    if json {
+    if opts.json {
         serde_json::to_writer_pretty(&mut out, &item)?;
         writeln!(&mut out)?;
         return Ok(());
     }
 
-    let theme = Theme::new(no_colour);
+    let theme = Theme::new(opts.no_color);
     let msg = format!(
         "Added  {}. {}",
         format!("{}", item.index).to_string(),
