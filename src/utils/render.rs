@@ -182,8 +182,58 @@ pub fn render_summary(item: &Item, opts: RenderOpts) -> io::Result<()> {
     }
 
     let theme = Theme::new(opts.no_color);
-    
-    writeln!(&mut out, "{}", format_text(&item.text, &theme))?;
+
+    // Header
+    writeln!(
+        &mut out,
+        "{}  {}",
+        theme.info(&format!("#{}", item.index)),
+        format_text(&item.text, &theme)
+    )?;
+
+    // Priority
+    writeln!(
+        &mut out,
+        "    {} {}",
+        theme.dim("Priority:"),
+        theme.priority(&item.priority)
+    )?;
+
+    // Tags
+    if !item.tags.is_empty() {
+        let tags = item
+            .tags
+            .iter()
+            .map(|t| format!("#{}", t))
+            .collect::<Vec<_>>()
+            .join("  ");
+
+        writeln!(&mut out, "    {} {}", theme.dim("Tags:"), tags)?;
+    }
+
+    // Created
+    writeln!(
+        &mut out,
+        "    {} {}",
+        theme.dim("Created:"),
+        item.created_at.format("%Y-%m-%d %H:%M")
+    )?;
+
+    // Done
+    let done_s = match &item.done_at {
+        Some(ts) => ts.format("%Y=%m-%d %H:%M").to_string(),
+        None => "not yet".into()
+    };
+
+    writeln!(&mut out, "    {} {}", theme.dim("Done:"), done_s)?;
+
+    // Notes
+    if let Some(n) = &item.notes {
+        writeln!(&mut out, "    {} ", theme.dim("Notes:"))?;
+        for line in n.lines() {
+            writeln!(&mut out, "      {}", line)?;
+        }
+    }
 
     Ok(())
 }
