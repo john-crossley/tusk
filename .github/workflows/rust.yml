@@ -1,0 +1,49 @@
+name: CI (build artifacts)
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            target: aarch64-apple-darwin
+          - os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (stable) + target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cargo build (release)
+        run: cargo build --locked --release --target ${{ matrix.target }}
+
+      - name: Prepare artifact
+        run: |
+          BIN_NAME="tusk"
+          TGT="${{ matrix.target }}"
+          OUT="dist/${BIN_NAME}-${TGT}"
+          mkdir -p dist
+          # macOS produces .dSYM etc; just pick the binary
+          cp "target/${TGT}/release/${BIN_NAME}" "$OUT"
+          # zip it for convenience
+          zip -j "${OUT}.zip" "$OUT"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tusk-${{ matrix.target }}
+          path: dist/*.zip
