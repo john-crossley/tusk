@@ -241,16 +241,17 @@ fn run_edit(cli: &Cli, idx: usize, text: &Option<String>, attach_notes: &bool) -
 
     let pos = validate_index(idx, dayfile.items.len())?;
 
-    let notes = if *attach_notes {
-        Some(edit_in_editor("# Notes")?)
-    } else {
-        None
-    };
-
     if let Some(item) = dayfile.items.get_mut(pos) {
         if let Some(s) = text {
             item.text = sanitise_str(s)?;
         }
+
+        let notes = if *attach_notes {
+            let template = item.notes.as_deref().unwrap_or("# Notes");
+            Some(edit_in_editor(&template)?)
+        } else {
+            None
+        };
 
         item.notes = notes;
 
