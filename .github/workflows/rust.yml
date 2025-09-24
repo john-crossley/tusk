@@ -1,10 +1,11 @@
-name: CI (build artifacts)
+name: Release
 
 on:
   push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+    tags: ["v*"]
+
+permissions:
+  contents: write
 
 env:
   CARGO_TERM_COLOR: always
@@ -17,9 +18,12 @@ jobs:
         include:
           - os: macos-14
             target: aarch64-apple-darwin
+          - os: macos-13
+            target: x86_64-apple-darwin
           - os: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
     runs-on: ${{ matrix.os }}
+
     steps:
       - uses: actions/checkout@v4
 
@@ -28,22 +32,46 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      - name: Cargo build (release)
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build (release)
         run: cargo build --locked --release --target ${{ matrix.target }}
 
-      - name: Prepare artifact
+      - name: (Optional) Strip binary
+        shell: bash
         run: |
-          BIN_NAME="tusk"
+          BIN="tusk"
           TGT="${{ matrix.target }}"
-          OUT="dist/${BIN_NAME}-${TGT}"
-          mkdir -p dist
-          # macOS produces .dSYM etc; just pick the binary
-          cp "target/${TGT}/release/${BIN_NAME}" "$OUT"
-          # zip it for convenience
-          zip -j "${OUT}.zip" "$OUT"
+          BIN_PATH="target/${TGT}/release/${BIN}"
+          if [[ "$TGT" == *linux* ]]; then strip "$BIN_PATH" || true; fi
+          if [[ "$TGT" == *apple-darwin ]]; then strip -x "$BIN_PATH" || true; fi
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      - name: Package
+        shell: bash
+        run: |
+          set -eux
+          BIN="tusk"  # your binary name
+          TGT="${{ matrix.target }}"
+          VER="${GITHUB_REF_NAME#v}"
+          PKG_DIR="${BIN}-${VER}-${TGT}"
+          mkdir -p "$PKG_DIR"
+          cp "target/${TGT}/release/${BIN}" "$PKG_DIR/"
+          cp LICENSE "$PKG_DIR/"
+          cp README.md "$PKG_DIR/"
+          zip -r "${PKG_DIR}.zip" "$PKG_DIR"
+          echo "ASSET=${PKG_DIR}.zip" >> $GITHUB_ENV
+
+      - name: Upload release asset
+        uses: softprops/action-gh-release@v2
         with:
-          name: tusk-${{ matrix.target }}
-          path: dist/*.zip
+          files: ${{ env.ASSET }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
