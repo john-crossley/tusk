@@ -9,7 +9,7 @@ Due to Tusk being under development installation is a bit manual at the moment, 
 
 ```bash
 brew tap john-crossley/tap
-brew install --HEAD john-crossley/tap/tusk
+brew install john-crossley/tap/tusk
 tusk --version # Pro tip: alias tusk to t
 ```
 
