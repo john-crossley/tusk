@@ -3,7 +3,7 @@ use std::{
     path::PathBuf,
 };
 
-use chrono::{NaiveDate, Utc};
+use chrono::{Duration, NaiveDate, Utc};
 use clap::{Parser, Subcommand};
 
 mod models;
@@ -29,9 +29,7 @@ use crate::{
 )]
 struct Cli {
     /// Target date (YYYY-MM-DD). Defaults to today if omitted.
-    #[arg(short, long,
-          value_parser = parse_ymd,
-          value_name = "YYYY-MM-DD")]
+    #[arg(short, long, value_parser = parse_ymd, value_name = "YYYY-MM-DD", global = true)]
     date: Option<NaiveDate>,
 
     /// Override the base data directory (default: platform-specific app data dir).
@@ -186,6 +184,7 @@ fn run_add(
 
 fn run_ls(cli: &Cli, tags: &Option<Vec<String>>) -> io::Result<()> {
     let (date, path) = current_day_context(cli)?;
+    println!("Date: {}", date);
     let mut dayfile = load_or_create_dayfile(&path, date)?;
 
     if let Some(tags) = tags {
@@ -295,8 +294,12 @@ fn validate_index(i: usize, len: usize) -> io::Result<usize> {
 }
 
 fn parse_ymd(d: &str) -> Result<NaiveDate, String> {
-    NaiveDate::parse_from_str(d, "%Y-%m-%d")
-        .map_err(|_| format!("Invalid date '{d}'. Use YYYY-MM-DD, e.g. 2025-09-14"))
+    match d {
+        "yesterday" => Ok(today_date() - Duration::days(1)),
+        "tomorrow" => Ok(today_date() + Duration::days(1)),
+        _ => NaiveDate::parse_from_str(d, "%Y-%m-%d")
+            .map_err(|_| format!("Invalid date '{d}'. Use YYYY-MM-DD, e.g. 2025-09-14")),
+    }
 }
 
 fn current_day_context(cli: &Cli) -> Result<(NaiveDate, PathBuf), Error> {
@@ -325,16 +328,6 @@ fn sanitise_str(text: &str) -> io::Result<String> {
 }
 
 fn get_item_priority(priority: Option<&str>) -> ItemPriority {
-    // if let Some(priority) = priority {
-    //     match priority.to_lowercase().as_str() {
-    //         "high" => ItemPriority::High,
-    //         "med" | "medium" => ItemPriority::Medium,
-    //         _ => ItemPriority::Low
-    //     }
-    // } else {
-    //     ItemPriority::Low
-    // }
-
     match priority.map(|p| p.to_lowercase()) {
         Some(ref p) if p == "high" => ItemPriority::High,
         Some(ref p) if p == "med" || p == "medium" => ItemPriority::Medium,
