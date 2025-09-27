@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use nanoid::nanoid;
 use serde::{Deserialize, Serialize};
 
@@ -21,6 +21,7 @@ pub struct Item {
     pub due: Option<DateTime<Utc>>,
     pub notes: Option<String>,
     pub index: u32,
+    pub migrated_from: Option<NaiveDate>
 }
 
 impl Item {
@@ -41,6 +42,7 @@ impl Item {
             due: None,
             notes,
             index: next_idx,
+            migrated_from: None
         }
     }
 }

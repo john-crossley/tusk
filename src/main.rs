@@ -3,19 +3,22 @@ use std::{
     path::PathBuf,
 };
 
-use chrono::{Duration, NaiveDate, Utc};
+use chrono::{NaiveDate, Utc};
 use clap::{Parser, Subcommand};
 
 mod models;
 mod utils;
 
 use crate::{
-    models::item::{Item, ItemPriority},
+    models::{
+        dayfile,
+        item::{Item, ItemPriority},
+    },
     utils::{
-        dates::today_date,
+        dates::{parse_ymd, today_date},
         editor::edit_in_editor,
         files::{load_or_create_dayfile, resolve_day_file_path, save_dayfile},
-        render::{RenderOpts, render, render_summary},
+        render::{RenderOpts, render, render_migrate, render_summary},
     },
 };
 
@@ -98,6 +101,22 @@ enum Commands {
 
     #[command(name = "show", about = "Show an item by its index.")]
     Show { index: usize },
+
+    #[command(
+        name = "migrate",
+        about = "Migrate undone items from one date to another."
+    )]
+    Migrate {
+        #[arg(name = "from", short, long, value_parser = parse_ymd, value_name = "YYYY-MM-DD")]
+        from_date: Option<NaiveDate>,
+
+        #[arg(name = "to", short, long, value_parser = parse_ymd, value_name = "YYYY-MM-DD")]
+        to_date: Option<NaiveDate>,
+
+        /// Perform a dry run to show you what changes will be made.
+        #[arg(long = "dry-run")]
+        dry_run: bool,
+    },
 }
 
 fn main() {
@@ -126,6 +145,11 @@ fn dispatch(cli: &Cli) -> io::Result<()> {
             attach_notes,
         }) => run_edit(&cli, *index, text, attach_notes),
         Some(Commands::Show { index }) => run_show(&cli, *index),
+        Some(Commands::Migrate {
+            from_date,
+            to_date,
+            dry_run,
+        }) => run_migrate(&cli, from_date, to_date, dry_run),
         None => run_ls(&cli, &None),
     }
 }
@@ -175,6 +199,7 @@ fn run_add(
                 verbose: cli.verbose,
                 no_color: cli.no_colour,
                 vault_name: None,
+                dry_run: false,
             },
         )?;
     }
@@ -201,6 +226,7 @@ fn run_ls(cli: &Cli, tags: &Option<Vec<String>>) -> io::Result<()> {
             verbose: cli.verbose,
             no_color: cli.no_colour,
             vault_name: None,
+            dry_run: false,
         },
     )?;
 
@@ -273,6 +299,70 @@ fn run_show(cli: &Cli, idx: usize) -> io::Result<()> {
                 verbose: cli.verbose,
                 no_color: cli.no_colour,
                 vault_name: None,
+                dry_run: false,
+            },
+        )?;
+    }
+
+    Ok(())
+}
+
+fn run_migrate(
+    cli: &Cli,
+    from_date: &Option<NaiveDate>,
+    to_date: &Option<NaiveDate>,
+    dry_run: &bool,
+) -> io::Result<()> {
+    let from_date = from_date.unwrap_or_else(today_date);
+    let to_date = to_date.unwrap_or_else(today_date);
+
+    if from_date == to_date {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Both `--from` and `--to` are the same value, check your input.",
+        ));
+    }
+
+    let from_date_path = resolve_day_file_path(
+        &from_date,
+        cli.data_dir.as_deref(),
+        cli.verbose,
+        cli.vault.as_deref(),
+    )?;
+
+    let mut dayfile = load_or_create_dayfile(&from_date_path, from_date)?;
+    let mut items_to_move: Vec<Item> = Vec::new();
+
+    dayfile.items.retain(|i| {
+        if i.done_at.is_none() {
+            items_to_move.push(i.clone());
+            false
+        } else {
+            true
+        }
+    });
+
+    // Move to...
+
+    let to_day_path = resolve_day_file_path(
+        &to_date,
+        cli.data_dir.as_deref(),
+        cli.verbose,
+        cli.vault.as_deref(),
+    )?;
+
+    let mut dayfile = load_or_create_dayfile(&to_day_path, to_date)?;
+    dayfile.items.append(&mut items_to_move);
+
+    if *dry_run {
+        render_migrate(
+            &dayfile,
+            RenderOpts {
+                json: cli.json,
+                verbose: cli.verbose,
+                no_color: cli.no_colour,
+                vault_name: None,
+                dry_run: *dry_run,
             },
         )?;
     }
@@ -291,15 +381,6 @@ fn validate_index(i: usize, len: usize) -> io::Result<usize> {
     }
 
     Ok(i - 1)
-}
-
-fn parse_ymd(d: &str) -> Result<NaiveDate, String> {
-    match d {
-        "yesterday" => Ok(today_date() - Duration::days(1)),
-        "tomorrow" => Ok(today_date() + Duration::days(1)),
-        _ => NaiveDate::parse_from_str(d, "%Y-%m-%d")
-            .map_err(|_| format!("Invalid date '{d}'. Use YYYY-MM-DD, e.g. 2025-09-14")),
-    }
 }
 
 fn current_day_context(cli: &Cli) -> Result<(NaiveDate, PathBuf), Error> {
