@@ -314,8 +314,6 @@ fn run_migrate(
         ));
     }
 
-    // Load yesterdays path
-
     let from_date_path = resolve_day_file_path(
         &from_date,
         cli.data_dir.as_deref(),
@@ -324,9 +322,6 @@ fn run_migrate(
     )?;
 
     let mut from_dayfile = load_or_create_dayfile(&from_date_path, from_date)?;
-
-    // find out whats outstanding
-
     let mut items_to_move: Vec<Item> = Vec::new();
 
     from_dayfile.items.retain_mut(|i| {

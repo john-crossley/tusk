@@ -130,9 +130,9 @@ fn render_migration_count(
 
     let item_word = if count == 1 { "item" } else { "items" };
     let details = if dry_run {
-        "will be migrated from"
+        "will be migrated:"
     } else {
-        "migrated from"
+        "migrated:"
     };
     let date_str = dayfile.date.format("%a %d %b %Y").to_string();
 
