@@ -86,6 +86,65 @@ impl Theme {
 pub fn render_migrate(dayfile: &DayFile, opts: RenderOpts) -> Result<(), Error> {
     let mut stdout = io::stdout().lock();
 
+    if opts.json {
+        return as_json(stdout, &dayfile);
+    }
+
+    let theme = Theme::new(opts.no_color);
+    let title = build_title_header(&dayfile, opts.vault_name.as_deref(), true);
+    title_underline(&theme, &title, &mut stdout)?;
+
+    let items: Vec<_> = dayfile
+        .items
+        .iter()
+        .filter(|i| i.migrated_from.is_some())
+        .collect();
+
+    if items.is_empty() {
+        writeln!(
+            &mut stdout,
+            "🦣 {}",
+            theme.dim(&format!("No tasks to migrate from {}", dayfile.date))
+        )?;
+
+        return Ok(());
+    }
+
+    render_list(&mut stdout, &dayfile.items, &theme, opts.verbose)?;
+    render_migration_count(&mut stdout, &dayfile, &theme, opts.dry_run)?;
+
+    Ok(())
+}
+
+fn render_migration_count(
+    mut out: impl Write,
+    dayfile: &DayFile,
+    theme: &Theme,
+    dry_run: bool,
+) -> Result<(), Error> {
+    let count = dayfile.items.len();
+
+    if count == 0 {
+        return Ok(());
+    }
+
+    let item_word = if count == 1 { "item" } else { "items" };
+    let details = if dry_run {
+        "will be migrated from"
+    } else {
+        "migrated from"
+    };
+    let date_str = dayfile.date.format("%a %d %b %Y").to_string();
+
+    writeln!(
+        out,
+        "  ↪ {} {} {} {}",
+        theme.info(&count.to_string()),
+        item_word,
+        details,
+        theme.info(&date_str)
+    )?;
+
     Ok(())
 }
 
@@ -103,7 +162,7 @@ pub fn render(dayfile: &DayFile, opts: RenderOpts) -> Result<(), Error> {
     }
 
     let theme = Theme::new(opts.no_color);
-    let title = build_title_header(&dayfile, opts.vault_name.as_deref());
+    let title = build_title_header(&dayfile, opts.vault_name.as_deref(), false);
     title_underline(&theme, &title, &mut stdout)?;
 
     if dayfile.items.is_empty() {
@@ -139,7 +198,7 @@ fn format_text(s: &str, theme: &Theme) -> String {
         .join(" ")
 }
 
-pub fn render_summary(item: &Item, opts: RenderOpts) -> io::Result<()> {
+pub fn render_summary(idx: Option<usize>, item: &Item, opts: RenderOpts) -> io::Result<()> {
     let mut out = io::stdout().lock();
 
     if opts.json {
@@ -149,12 +208,13 @@ pub fn render_summary(item: &Item, opts: RenderOpts) -> io::Result<()> {
     }
 
     let theme = Theme::new(opts.no_color);
+    let index = idx.map(|i| i.to_string()).unwrap_or(item.id.to_string());
 
     // Header
     writeln!(
         &mut out,
         "{}  {}",
-        theme.info(&format!("#{}", item.index)),
+        theme.info(&format!("#{}", index)),
         format_text(&item.text, &theme)
     )?;
 
@@ -227,9 +287,13 @@ fn repeat_char(c: char, n: usize) -> String {
     s
 }
 
-fn build_title_header(dayfile: &DayFile, vault_name: Option<&str>) -> String {
+fn build_title_header(dayfile: &DayFile, vault_name: Option<&str>, migration: bool) -> String {
     let date_str = dayfile.date.format("%a %d %b %Y").to_string();
-    let mut title = format!("Tasks for: {}", date_str);
+    let mut title = if migration {
+        format!("Migration for: {}", date_str)
+    } else {
+        format!("Tasks for: {}", date_str)
+    };
 
     if let Some(v) = vault_name {
         title.push_str(&format!(" • vault: {}", v));
@@ -277,10 +341,17 @@ fn render_list(
         };
 
         if i.done_at.is_some() {
-            writeln!(out, "{}{prio}", theme.dim(&line))?;
+            write!(out, "{}{prio}", theme.dim(&line))?;
         } else {
-            writeln!(out, "{line}{prio}")?;
+            write!(out, "{line}{prio}")?;
         }
+
+        if let Some(migrated_from) = i.migrated_from {
+            let date_str = migrated_from.format("%a %d %b %Y").to_string();
+            write!(out, "  ↪ {}", theme.dim(&date_str))?;
+        }
+
+        writeln!(&mut out)?;
     }
 
     Ok(())

@@ -10,10 +10,7 @@ mod models;
 mod utils;
 
 use crate::{
-    models::{
-        dayfile,
-        item::{Item, ItemPriority},
-    },
+    models::item::{Item, ItemPriority},
     utils::{
         dates::{parse_ymd, today_date},
         editor::edit_in_editor,
@@ -168,13 +165,6 @@ fn run_add(
     let (date, path) = current_day_context(cli)?;
     let mut dayfile = load_or_create_dayfile(&path, date)?;
 
-    let next_idx: u32 = (dayfile.items.len() + 1).try_into().map_err(|_| {
-        io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "I wasn't built for this many items.",
-        )
-    })?;
-
     let notes = if *attach_notes {
         Some(edit_in_editor("# Notes")?)
     } else {
@@ -185,7 +175,6 @@ fn run_add(
         new_text,
         get_item_priority(priority),
         tags,
-        next_idx,
         notes,
     ));
 
@@ -193,6 +182,7 @@ fn run_add(
 
     if let Some(item) = dayfile.items.last() {
         render_summary(
+            None,
             item,
             RenderOpts {
                 json: cli.json,
@@ -293,6 +283,7 @@ fn run_show(cli: &Cli, idx: usize) -> io::Result<()> {
 
     if let Some(item) = dayfile.items.get_mut(pos) {
         render_summary(
+            Some(idx),
             item,
             RenderOpts {
                 json: cli.json,
@@ -323,6 +314,8 @@ fn run_migrate(
         ));
     }
 
+    // Load yesterdays path
+
     let from_date_path = resolve_day_file_path(
         &from_date,
         cli.data_dir.as_deref(),
@@ -330,11 +323,15 @@ fn run_migrate(
         cli.vault.as_deref(),
     )?;
 
-    let mut dayfile = load_or_create_dayfile(&from_date_path, from_date)?;
+    let mut from_dayfile = load_or_create_dayfile(&from_date_path, from_date)?;
+
+    // find out whats outstanding
+
     let mut items_to_move: Vec<Item> = Vec::new();
 
-    dayfile.items.retain(|i| {
+    from_dayfile.items.retain_mut(|i| {
         if i.done_at.is_none() {
+            i.migrated_from = Some(from_date);
             items_to_move.push(i.clone());
             false
         } else {
@@ -342,7 +339,9 @@ fn run_migrate(
         }
     });
 
-    // Move to...
+    if !*dry_run {
+        save_dayfile(&from_date_path, &from_dayfile)?;
+    }
 
     let to_day_path = resolve_day_file_path(
         &to_date,
@@ -351,20 +350,22 @@ fn run_migrate(
         cli.vault.as_deref(),
     )?;
 
-    let mut dayfile = load_or_create_dayfile(&to_day_path, to_date)?;
-    dayfile.items.append(&mut items_to_move);
+    let mut to_dayfile = load_or_create_dayfile(&to_day_path, to_date)?;
+    to_dayfile.items.append(&mut items_to_move);
 
-    if *dry_run {
-        render_migrate(
-            &dayfile,
-            RenderOpts {
-                json: cli.json,
-                verbose: cli.verbose,
-                no_color: cli.no_colour,
-                vault_name: None,
-                dry_run: *dry_run,
-            },
-        )?;
+    render_migrate(
+        &to_dayfile,
+        RenderOpts {
+            json: cli.json,
+            verbose: cli.verbose,
+            no_color: cli.no_colour,
+            vault_name: None,
+            dry_run: *dry_run,
+        },
+    )?;
+
+    if !*dry_run {
+        save_dayfile(&to_day_path, &to_dayfile)?;
     }
 
     Ok(())

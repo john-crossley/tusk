@@ -20,7 +20,6 @@ pub struct Item {
     pub tags: Vec<String>,
     pub due: Option<DateTime<Utc>>,
     pub notes: Option<String>,
-    pub index: u32,
     pub migrated_from: Option<NaiveDate>
 }
 
@@ -29,7 +28,6 @@ impl Item {
         text: String,
         priority: ItemPriority,
         tags: Vec<String>,
-        next_idx: u32,
         notes: Option<String>,
     ) -> Self {
         Item {
@@ -41,7 +39,6 @@ impl Item {
             tags,
             due: None,
             notes,
-            index: next_idx,
             migrated_from: None
         }
     }
