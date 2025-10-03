@@ -10,12 +10,13 @@ mod models;
 mod utils;
 
 use crate::{
-    models::item::{Item, ItemPriority},
+    models::item::Item,
     utils::{
         dates::{parse_ymd, today_date},
         editor::edit_in_editor,
         files::{load_or_create_dayfile, resolve_day_file_path, save_dayfile},
-        render::{RenderOpts, render, render_migrate, render_summary},
+        helpers::{current_day_context, extract_tags, get_item_priority, sanitise_str, validate_index},
+        render::{render, render_migrate, render_summary, RenderOpts},
     },
 };
 
@@ -364,56 +365,4 @@ fn run_migrate(
     }
 
     Ok(())
-}
-
-// helper functions
-
-fn validate_index(i: usize, len: usize) -> io::Result<usize> {
-    if i == 0 || i > len {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            format!("item at index {} does not exist.", i),
-        ));
-    }
-
-    Ok(i - 1)
-}
-
-fn current_day_context(cli: &Cli) -> Result<(NaiveDate, PathBuf), Error> {
-    let date = cli.date.unwrap_or_else(today_date);
-
-    let path = resolve_day_file_path(
-        &date,
-        cli.data_dir.as_deref(),
-        cli.verbose,
-        cli.vault.as_deref(),
-    )?;
-
-    return Ok((date, path));
-}
-
-fn sanitise_str(text: &str) -> io::Result<String> {
-    let trimmed = text.trim();
-    if trimmed.is_empty() {
-        Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "Oops, did you forget to add some text?",
-        ))
-    } else {
-        Ok(trimmed.to_owned())
-    }
-}
-
-fn get_item_priority(priority: Option<&str>) -> ItemPriority {
-    match priority.map(|p| p.to_lowercase()) {
-        Some(ref p) if p == "high" => ItemPriority::High,
-        Some(ref p) if p == "med" || p == "medium" => ItemPriority::Medium,
-        _ => ItemPriority::Low,
-    }
-}
-
-fn extract_tags(s: &str) -> Vec<String> {
-    s.split_whitespace()
-        .filter_map(|w| w.strip_prefix('#').map(|t| t.to_string()))
-        .collect()
 }
