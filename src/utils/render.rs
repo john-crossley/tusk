@@ -68,7 +68,7 @@ impl Theme {
         let g = match p {
             ItemPriority::High => "‼",
             ItemPriority::Medium => "▲",
-            ItemPriority::Low => "",
+            ItemPriority::Low => "Low",
         };
 
         if !self.color {
@@ -254,6 +254,15 @@ pub fn render_summary(idx: Option<usize>, item: &Item, opts: RenderOpts) -> io::
 
     writeln!(&mut out, "    {} {}", theme.dim("Done:"), done_s)?;
 
+    if let Some(migrated_from) = item.migrated_from {
+        writeln!(
+            &mut out,
+            "    {} {}",
+            theme.dim("Migrated from:"),
+            migrated_from.format("%Y-%m-%d").to_string()
+        )?;
+    }
+
     // Notes
     if let Some(n) = &item.notes {
         writeln!(&mut out, "    {} ", theme.dim("Notes:"))?;
@@ -335,10 +344,7 @@ fn render_list(
             width = width
         );
 
-        let prio = match i.priority {
-            ItemPriority::Low => String::new(),
-            _ => format!(" {}", theme.priority(&i.priority)),
-        };
+        let prio = format!(" {}", theme.priority(&i.priority));
 
         if i.done_at.is_some() {
             write!(out, "{}{prio}", theme.dim(&line))?;
