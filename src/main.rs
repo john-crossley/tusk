@@ -200,7 +200,6 @@ fn run_add(
 
 fn run_ls(cli: &Cli, tags: &Option<Vec<String>>) -> io::Result<()> {
     let (date, path) = current_day_context(cli)?;
-    println!("Date: {}", date);
     let mut dayfile = load_or_create_dayfile(&path, date)?;
 
     if let Some(tags) = tags {
