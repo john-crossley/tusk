@@ -97,6 +97,9 @@ enum Commands {
         /// Add a note to this item, opens in an external editor
         #[arg(short = 'n', long = "notes")]
         attach_notes: bool,
+        /// The priority of the item being edited.
+        #[arg(short = 'p', long = "priority")]
+        priority: Option<String>,
     },
 
     #[command(name = "show", about = "Show an item by its index.")]
@@ -143,7 +146,8 @@ fn dispatch(cli: &Cli) -> io::Result<()> {
             index,
             text,
             attach_notes,
-        }) => run_edit(&cli, *index, text, attach_notes),
+            priority,
+        }) => run_edit(&cli, *index, text, attach_notes, priority.as_deref()),
         Some(Commands::Show { index }) => run_show(&cli, *index),
         Some(Commands::Migrate {
             from_date,
@@ -252,7 +256,13 @@ fn run_rm(cli: &Cli, idx: usize) -> io::Result<()> {
     Ok(())
 }
 
-fn run_edit(cli: &Cli, idx: usize, text: &Option<String>, attach_notes: &bool) -> io::Result<()> {
+fn run_edit(
+    cli: &Cli,
+    idx: usize,
+    text: &Option<String>,
+    attach_notes: &bool,
+    priority: Option<&str>,
+) -> io::Result<()> {
     let (date, path) = current_day_context(cli)?;
     let mut dayfile = load_or_create_dayfile(&path, date)?;
 
@@ -271,6 +281,10 @@ fn run_edit(cli: &Cli, idx: usize, text: &Option<String>, attach_notes: &bool) -
         };
 
         item.notes = notes;
+
+        if priority.is_some() {
+            item.priority = get_item_priority(priority);
+        }
 
         save_dayfile(&path, &dayfile)?;
     }
@@ -306,7 +320,10 @@ fn prepare_to_migrate_items(from_dayfile: &DayFile, from_date: NaiveDate) -> Vec
         .iter()
         .filter(|i| i.done_at.is_none())
         .cloned()
-        .map(|mut i| { i.migrated_from = Some(from_date); i })
+        .map(|mut i| {
+            i.migrated_from = Some(from_date);
+            i
+        })
         .collect()
 }
 
@@ -358,10 +375,9 @@ fn run_migrate(
         render_migrate(&preview, &from_df, &pending_items, opts)?;
         return Ok(());
     } else {
-
         let (mut to_move, to_keep): (Vec<Item>, Vec<Item>) =
             from_df.items.into_iter().partition(|i| i.done_at.is_none());
-        
+
         for i in &mut to_move {
             i.migrated_from = Some(from_date);
         }
