@@ -153,7 +153,8 @@ fn render_migration_count(
 pub fn as_json(mut out: impl Write, dayfile: &DayFile) -> Result<(), Error> {
     serde_json::to_writer_pretty(&mut out, &dayfile)?;
     writeln!(out)?;
-    return Ok(());
+    
+    Ok(())
 }
 
 pub fn render(dayfile: &DayFile, opts: RenderOpts) -> Result<(), Error> {
