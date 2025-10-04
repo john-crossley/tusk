@@ -314,16 +314,12 @@ fn run_show(cli: &Cli, idx: usize) -> io::Result<()> {
     Ok(())
 }
 
-fn prepare_to_migrate_items(from_dayfile: &DayFile, from_date: NaiveDate) -> Vec<Item> {
+fn prepare_to_migrate_items(from_dayfile: &DayFile) -> Vec<Item> {
     from_dayfile
         .items
         .iter()
         .filter(|i| i.done_at.is_none())
         .cloned()
-        .map(|mut i| {
-            i.migrated_from = Some(from_date);
-            i
-        })
         .collect()
 }
 
@@ -359,7 +355,7 @@ fn run_migrate(
 
     let mut from_df = load_or_create_dayfile(&from_df_path, from_date)?;
     let mut to_df = load_or_create_dayfile(&to_df_path, to_date)?;
-    let pending_items = prepare_to_migrate_items(&from_df, from_date);
+    let pending_items = prepare_to_migrate_items(&from_df);
 
     let opts = RenderOpts {
         json: cli.json,
@@ -373,7 +369,6 @@ fn run_migrate(
         let mut preview = to_df.clone();
         preview.items.extend_from_slice(&pending_items);
         render_migrate(&preview, &from_df, &pending_items, opts)?;
-        return Ok(());
     } else {
         let (mut to_move, to_keep): (Vec<Item>, Vec<Item>) =
             from_df.items.into_iter().partition(|i| i.done_at.is_none());
@@ -388,7 +383,7 @@ fn run_migrate(
         save_dayfile(&from_df_path, &from_df)?;
         save_dayfile(&to_df_path, &to_df)?;
 
-        render_migrate(&to_df, &from_df, &to_df.items, opts)?;
+        render_migrate(&to_df, &from_df, &pending_items, opts)?;
     }
 
     Ok(())

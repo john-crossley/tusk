@@ -97,7 +97,7 @@ pub fn render_migrate(
     }
 
     let theme = Theme::new(opts.no_color);
-    let title = build_title_header(&to_df, opts.vault_name.as_deref(), Some(from_df));
+    let title = build_title_header(&to_df, opts.vault_name.as_deref(), Some(from_df), &theme);
     title_underline(&theme, &title, &mut stdout)?;
 
     if items.is_empty() {
@@ -164,7 +164,7 @@ pub fn render(dayfile: &DayFile, opts: RenderOpts) -> Result<(), Error> {
     }
 
     let theme = Theme::new(opts.no_color);
-    let title = build_title_header(&dayfile, opts.vault_name.as_deref(), None);
+    let title = build_title_header(&dayfile, opts.vault_name.as_deref(), None, &theme);
     title_underline(&theme, &title, &mut stdout)?;
 
     if dayfile.items.is_empty() {
@@ -302,12 +302,13 @@ fn build_title_header(
     df: &DayFile,
     vault_name: Option<&str>,
     migration: Option<&DayFile>,
+    theme: &Theme
 ) -> String {
     let date_str = df.date.format("%a %d %b %Y").to_string();
 
     let mut title = if let Some(from_df) = migration {
         let from_date_str = from_df.date.format("%a %d %b %Y").to_string();
-        format!("Migration from: {}, to: {}", from_date_str, date_str)
+        format!("Migration from {} → {}", theme.info(&from_date_str), theme.info(&date_str))
     } else {
         format!("Tasks for: {}", date_str)
     };
