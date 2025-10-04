@@ -362,7 +362,7 @@ fn render_list(
         }
 
         if let Some(migrated_from) = i.migrated_from {
-            let date_str = migrated_from.format("%a %d %b %Y").to_string();
+            let date_str = migrated_from.format("%a, %d %b").to_string();
             write!(out, "  ↪ {}", theme.dim(&date_str))?;
         }
 
