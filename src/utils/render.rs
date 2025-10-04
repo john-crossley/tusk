@@ -1,3 +1,4 @@
+use chrono::NaiveDate;
 use colored::{ColoredString, Colorize};
 use std::io::{self, Error, IsTerminal, Write};
 
@@ -68,7 +69,7 @@ impl Theme {
         let g = match p {
             ItemPriority::High => "‼",
             ItemPriority::Medium => "▲",
-            ItemPriority::Low => "Low",
+            ItemPriority::Low => "▽",
         };
 
         if !self.color {
@@ -78,51 +79,51 @@ impl Theme {
         match p {
             ItemPriority::High => g.red().bold(),
             ItemPriority::Medium => g.yellow().bold(),
-            ItemPriority::Low => g.normal(),
+            ItemPriority::Low => g.dimmed(),
         }
     }
 }
 
-pub fn render_migrate(dayfile: &DayFile, opts: RenderOpts) -> Result<(), Error> {
+pub fn render_migrate(
+    to_df: &DayFile,
+    from_df: &DayFile,
+    items: &[Item],
+    opts: RenderOpts,
+) -> Result<(), Error> {
     let mut stdout = io::stdout().lock();
 
     if opts.json {
-        return as_json(stdout, &dayfile);
+        return as_json(stdout, &to_df);
     }
 
     let theme = Theme::new(opts.no_color);
-    let title = build_title_header(&dayfile, opts.vault_name.as_deref(), true);
+    let title = build_title_header(&to_df, opts.vault_name.as_deref(), Some(from_df));
     title_underline(&theme, &title, &mut stdout)?;
-
-    let items: Vec<_> = dayfile
-        .items
-        .iter()
-        .filter(|i| i.migrated_from.is_some())
-        .collect();
 
     if items.is_empty() {
         writeln!(
             &mut stdout,
             "🦣 {}",
-            theme.dim(&format!("No tasks to migrate from {}", dayfile.date))
+            theme.dim(&format!("No tasks to migrate from {}", from_df.date))
         )?;
 
         return Ok(());
     }
 
-    render_list(&mut stdout, &dayfile.items, &theme, opts.verbose)?;
-    render_migration_count(&mut stdout, &dayfile, &theme, opts.dry_run)?;
+    render_list(&mut stdout, items, &theme, opts.verbose)?;
+    render_migration_count(&mut stdout, items, from_df.date, &theme, opts.dry_run)?;
 
     Ok(())
 }
 
 fn render_migration_count(
     mut out: impl Write,
-    dayfile: &DayFile,
+    items: &[Item],
+    date: NaiveDate,
     theme: &Theme,
     dry_run: bool,
 ) -> Result<(), Error> {
-    let count = dayfile.items.len();
+    let count = items.len();
 
     if count == 0 {
         return Ok(());
@@ -130,11 +131,12 @@ fn render_migration_count(
 
     let item_word = if count == 1 { "item" } else { "items" };
     let details = if dry_run {
-        "will be migrated:"
+        "will be migrated from:"
     } else {
         "migrated:"
     };
-    let date_str = dayfile.date.format("%a %d %b %Y").to_string();
+
+    let date_str = date.format("%a %d %b %Y").to_string();
 
     writeln!(
         out,
@@ -162,7 +164,7 @@ pub fn render(dayfile: &DayFile, opts: RenderOpts) -> Result<(), Error> {
     }
 
     let theme = Theme::new(opts.no_color);
-    let title = build_title_header(&dayfile, opts.vault_name.as_deref(), false);
+    let title = build_title_header(&dayfile, opts.vault_name.as_deref(), None);
     title_underline(&theme, &title, &mut stdout)?;
 
     if dayfile.items.is_empty() {
@@ -296,10 +298,16 @@ fn repeat_char(c: char, n: usize) -> String {
     s
 }
 
-fn build_title_header(dayfile: &DayFile, vault_name: Option<&str>, migration: bool) -> String {
-    let date_str = dayfile.date.format("%a %d %b %Y").to_string();
-    let mut title = if migration {
-        format!("Migration for: {}", date_str)
+fn build_title_header(
+    df: &DayFile,
+    vault_name: Option<&str>,
+    migration: Option<&DayFile>,
+) -> String {
+    let date_str = df.date.format("%a %d %b %Y").to_string();
+
+    let mut title = if let Some(from_df) = migration {
+        let from_date_str = from_df.date.format("%a %d %b %Y").to_string();
+        format!("Migration from: {}, to: {}", from_date_str, date_str)
     } else {
         format!("Tasks for: {}", date_str)
     };

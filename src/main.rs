@@ -10,13 +10,15 @@ mod models;
 mod utils;
 
 use crate::{
-    models::item::Item,
+    models::{dayfile::DayFile, item::Item},
     utils::{
         dates::{parse_ymd, today_date},
         editor::edit_in_editor,
         files::{load_or_create_dayfile, resolve_day_file_path, save_dayfile},
-        helpers::{current_day_context, extract_tags, get_item_priority, sanitise_str, validate_index},
-        render::{render, render_migrate, render_summary, RenderOpts},
+        helpers::{
+            current_day_context, extract_tags, get_item_priority, sanitise_str, validate_index,
+        },
+        render::{RenderOpts, render, render_migrate, render_summary},
     },
 };
 
@@ -147,7 +149,7 @@ fn dispatch(cli: &Cli) -> io::Result<()> {
             from_date,
             to_date,
             dry_run,
-        }) => run_migrate(&cli, from_date, to_date, dry_run),
+        }) => run_migrate(&cli, from_date, to_date, *dry_run),
         None => run_ls(&cli, &None),
     }
 }
@@ -298,11 +300,21 @@ fn run_show(cli: &Cli, idx: usize) -> io::Result<()> {
     Ok(())
 }
 
+fn prepare_to_migrate_items(from_dayfile: &DayFile, from_date: NaiveDate) -> Vec<Item> {
+    from_dayfile
+        .items
+        .iter()
+        .filter(|i| i.done_at.is_none())
+        .cloned()
+        .map(|mut i| { i.migrated_from = Some(from_date); i })
+        .collect()
+}
+
 fn run_migrate(
     cli: &Cli,
     from_date: &Option<NaiveDate>,
     to_date: &Option<NaiveDate>,
-    dry_run: &bool,
+    dry_run: bool,
 ) -> io::Result<()> {
     let from_date = from_date.unwrap_or_else(today_date);
     let to_date = to_date.unwrap_or_else(today_date);
@@ -314,53 +326,53 @@ fn run_migrate(
         ));
     }
 
-    let from_date_path = resolve_day_file_path(
+    let from_df_path = resolve_day_file_path(
         &from_date,
         cli.data_dir.as_deref(),
         cli.verbose,
         cli.vault.as_deref(),
     )?;
 
-    let mut from_dayfile = load_or_create_dayfile(&from_date_path, from_date)?;
-    let mut items_to_move: Vec<Item> = Vec::new();
-
-    from_dayfile.items.retain_mut(|i| {
-        if i.done_at.is_none() {
-            i.migrated_from = Some(from_date);
-            items_to_move.push(i.clone());
-            false
-        } else {
-            true
-        }
-    });
-
-    if !*dry_run {
-        save_dayfile(&from_date_path, &from_dayfile)?;
-    }
-
-    let to_day_path = resolve_day_file_path(
+    let to_df_path = resolve_day_file_path(
         &to_date,
         cli.data_dir.as_deref(),
         cli.verbose,
         cli.vault.as_deref(),
     )?;
 
-    let mut to_dayfile = load_or_create_dayfile(&to_day_path, to_date)?;
-    to_dayfile.items.append(&mut items_to_move);
+    let mut from_df = load_or_create_dayfile(&from_df_path, from_date)?;
+    let mut to_df = load_or_create_dayfile(&to_df_path, to_date)?;
+    let pending_items = prepare_to_migrate_items(&from_df, from_date);
 
-    render_migrate(
-        &to_dayfile,
-        RenderOpts {
-            json: cli.json,
-            verbose: cli.verbose,
-            no_color: cli.no_colour,
-            vault_name: None,
-            dry_run: *dry_run,
-        },
-    )?;
+    let opts = RenderOpts {
+        json: cli.json,
+        verbose: cli.verbose,
+        no_color: cli.no_colour,
+        vault_name: None,
+        dry_run,
+    };
 
-    if !*dry_run {
-        save_dayfile(&to_day_path, &to_dayfile)?;
+    if dry_run {
+        let mut preview = to_df.clone();
+        preview.items.extend_from_slice(&pending_items);
+        render_migrate(&preview, &from_df, &pending_items, opts)?;
+        return Ok(());
+    } else {
+
+        let (mut to_move, to_keep): (Vec<Item>, Vec<Item>) =
+            from_df.items.into_iter().partition(|i| i.done_at.is_none());
+        
+        for i in &mut to_move {
+            i.migrated_from = Some(from_date);
+        }
+
+        from_df.items = to_keep;
+        to_df.items.extend(to_move);
+
+        save_dayfile(&from_df_path, &from_df)?;
+        save_dayfile(&to_df_path, &to_df)?;
+
+        render_migrate(&to_df, &from_df, &to_df.items, opts)?;
     }
 
     Ok(())

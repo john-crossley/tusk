@@ -20,7 +20,7 @@ pub struct Item {
     pub tags: Vec<String>,
     pub due: Option<DateTime<Utc>>,
     pub notes: Option<String>,
-    pub migrated_from: Option<NaiveDate>
+    pub migrated_from: Option<NaiveDate>,
 }
 
 impl Item {
@@ -39,7 +39,7 @@ impl Item {
             tags,
             due: None,
             notes,
-            migrated_from: None
+            migrated_from: None,
         }
     }
 }
