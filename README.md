@@ -89,6 +89,7 @@ Edit a task’s text and or notes.
 ```bash
 t edit 4 "Count 🐑 before sleeping"
 t edit 4 -n
+t edit 4 -p high|med|low
 ```
 
 #### Options
@@ -104,6 +105,21 @@ t show 5
 ```
 Displays the task, priority, tags, notes, and metadata in a nice formatted view.
 
+### Migrate
+
+Migrate tasks from one day to another, only migrates incomplete tasks.
+
+```bash
+t migrate --from yesterday
+t migrate --from 2025-10-02 --to tomorrow
+```
+
+#### Options
+
+* `-f`, `--from <YYYY-MM-DD>`: The from date, can use `yesterday`, `today`, `tomorrow`
+* `-t`, `--to <YYYY-MM-DD>`: The to date, can use `yesterday`, `today`, `tomorrow`
+* `--dry-run`: Output what will be migrated without actually performing the migration.
+
 ### Examples
 
 ```bash
@@ -118,6 +134,9 @@ t show 1
 
 # List only work-related tasks
 t ls --tag work
+
+# End of the day and you still have incomplete actions.
+t migrate --to tomorrow
 ```
 
 ### Screenshots

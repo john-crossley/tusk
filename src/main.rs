@@ -10,12 +10,15 @@ mod models;
 mod utils;
 
 use crate::{
-    models::item::{Item, ItemPriority},
+    models::{dayfile::DayFile, item::Item},
     utils::{
-        dates::today_date,
+        dates::{parse_ymd, today_date},
         editor::edit_in_editor,
         files::{load_or_create_dayfile, resolve_day_file_path, save_dayfile},
-        render::{RenderOpts, render, render_summary},
+        helpers::{
+            current_day_context, extract_tags, get_item_priority, sanitise_str, validate_index,
+        },
+        render::{RenderOpts, render, render_migrate, render_summary},
     },
 };
 
@@ -29,9 +32,7 @@ use crate::{
 )]
 struct Cli {
     /// Target date (YYYY-MM-DD). Defaults to today if omitted.
-    #[arg(short, long,
-          value_parser = parse_ymd,
-          value_name = "YYYY-MM-DD")]
+    #[arg(short, long, value_parser = parse_ymd, value_name = "YYYY-MM-DD", global = true)]
     date: Option<NaiveDate>,
 
     /// Override the base data directory (default: platform-specific app data dir).
@@ -96,10 +97,29 @@ enum Commands {
         /// Add a note to this item, opens in an external editor
         #[arg(short = 'n', long = "notes")]
         attach_notes: bool,
+        /// The priority of the item being edited.
+        #[arg(short = 'p', long = "priority")]
+        priority: Option<String>,
     },
 
     #[command(name = "show", about = "Show an item by its index.")]
     Show { index: usize },
+
+    #[command(
+        name = "migrate",
+        about = "Migrate undone items from one date to another."
+    )]
+    Migrate {
+        #[arg(name = "from", short, long, value_parser = parse_ymd, value_name = "YYYY-MM-DD")]
+        from_date: Option<NaiveDate>,
+
+        #[arg(name = "to", short, long, value_parser = parse_ymd, value_name = "YYYY-MM-DD")]
+        to_date: Option<NaiveDate>,
+
+        /// Perform a dry run to show you what changes will be made.
+        #[arg(long = "dry-run")]
+        dry_run: bool,
+    },
 }
 
 fn main() {
@@ -126,8 +146,14 @@ fn dispatch(cli: &Cli) -> io::Result<()> {
             index,
             text,
             attach_notes,
-        }) => run_edit(&cli, *index, text, attach_notes),
+            priority,
+        }) => run_edit(&cli, *index, text, attach_notes, priority.as_deref()),
         Some(Commands::Show { index }) => run_show(&cli, *index),
+        Some(Commands::Migrate {
+            from_date,
+            to_date,
+            dry_run,
+        }) => run_migrate(&cli, from_date, to_date, *dry_run),
         None => run_ls(&cli, &None),
     }
 }
@@ -146,13 +172,6 @@ fn run_add(
     let (date, path) = current_day_context(cli)?;
     let mut dayfile = load_or_create_dayfile(&path, date)?;
 
-    let next_idx: u32 = (dayfile.items.len() + 1).try_into().map_err(|_| {
-        io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "I wasn't built for this many items.",
-        )
-    })?;
-
     let notes = if *attach_notes {
         Some(edit_in_editor("# Notes")?)
     } else {
@@ -163,7 +182,6 @@ fn run_add(
         new_text,
         get_item_priority(priority),
         tags,
-        next_idx,
         notes,
     ));
 
@@ -171,12 +189,14 @@ fn run_add(
 
     if let Some(item) = dayfile.items.last() {
         render_summary(
+            None,
             item,
             RenderOpts {
                 json: cli.json,
                 verbose: cli.verbose,
                 no_color: cli.no_colour,
                 vault_name: None,
+                dry_run: false,
             },
         )?;
     }
@@ -202,6 +222,7 @@ fn run_ls(cli: &Cli, tags: &Option<Vec<String>>) -> io::Result<()> {
             verbose: cli.verbose,
             no_color: cli.no_colour,
             vault_name: None,
+            dry_run: false,
         },
     )?;
 
@@ -235,7 +256,13 @@ fn run_rm(cli: &Cli, idx: usize) -> io::Result<()> {
     Ok(())
 }
 
-fn run_edit(cli: &Cli, idx: usize, text: &Option<String>, attach_notes: &bool) -> io::Result<()> {
+fn run_edit(
+    cli: &Cli,
+    idx: usize,
+    text: &Option<String>,
+    attach_notes: &bool,
+    priority: Option<&str>,
+) -> io::Result<()> {
     let (date, path) = current_day_context(cli)?;
     let mut dayfile = load_or_create_dayfile(&path, date)?;
 
@@ -255,6 +282,10 @@ fn run_edit(cli: &Cli, idx: usize, text: &Option<String>, attach_notes: &bool) -
 
         item.notes = notes;
 
+        if priority.is_some() {
+            item.priority = get_item_priority(priority);
+        }
+
         save_dayfile(&path, &dayfile)?;
     }
 
@@ -268,12 +299,14 @@ fn run_show(cli: &Cli, idx: usize) -> io::Result<()> {
 
     if let Some(item) = dayfile.items.get_mut(pos) {
         render_summary(
+            Some(idx),
             item,
             RenderOpts {
                 json: cli.json,
                 verbose: cli.verbose,
                 no_color: cli.no_colour,
                 vault_name: None,
+                dry_run: false,
             },
         )?;
     }
@@ -281,69 +314,77 @@ fn run_show(cli: &Cli, idx: usize) -> io::Result<()> {
     Ok(())
 }
 
-// helper functions
+fn prepare_to_migrate_items(from_dayfile: &DayFile) -> Vec<Item> {
+    from_dayfile
+        .items
+        .iter()
+        .filter(|i| i.done_at.is_none())
+        .cloned()
+        .collect()
+}
 
-fn validate_index(i: usize, len: usize) -> io::Result<usize> {
-    if i == 0 || i > len {
+fn run_migrate(
+    cli: &Cli,
+    from_date: &Option<NaiveDate>,
+    to_date: &Option<NaiveDate>,
+    dry_run: bool,
+) -> io::Result<()> {
+    let from_date = from_date.unwrap_or_else(today_date);
+    let to_date = to_date.unwrap_or_else(today_date);
+
+    if from_date == to_date {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
-            format!("item at index {} does not exist.", i),
+            "Both `--from` and `--to` are the same value, check your input.",
         ));
     }
 
-    Ok(i - 1)
-}
-
-fn parse_ymd(d: &str) -> Result<NaiveDate, String> {
-    NaiveDate::parse_from_str(d, "%Y-%m-%d")
-        .map_err(|_| format!("Invalid date '{d}'. Use YYYY-MM-DD, e.g. 2025-09-14"))
-}
-
-fn current_day_context(cli: &Cli) -> Result<(NaiveDate, PathBuf), Error> {
-    let date = cli.date.unwrap_or_else(today_date);
-
-    let path = resolve_day_file_path(
-        &date,
+    let from_df_path = resolve_day_file_path(
+        &from_date,
         cli.data_dir.as_deref(),
         cli.verbose,
         cli.vault.as_deref(),
     )?;
 
-    return Ok((date, path));
-}
+    let to_df_path = resolve_day_file_path(
+        &to_date,
+        cli.data_dir.as_deref(),
+        cli.verbose,
+        cli.vault.as_deref(),
+    )?;
 
-fn sanitise_str(text: &str) -> io::Result<String> {
-    let trimmed = text.trim();
-    if trimmed.is_empty() {
-        Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "Oops, did you forget to add some text?",
-        ))
+    let mut from_df = load_or_create_dayfile(&from_df_path, from_date)?;
+    let mut to_df = load_or_create_dayfile(&to_df_path, to_date)?;
+    let pending_items = prepare_to_migrate_items(&from_df);
+
+    let opts = RenderOpts {
+        json: cli.json,
+        verbose: cli.verbose,
+        no_color: cli.no_colour,
+        vault_name: None,
+        dry_run,
+    };
+
+    if dry_run {
+        let mut preview = to_df.clone();
+        preview.items.extend_from_slice(&pending_items);
+        render_migrate(&preview, &from_df, &pending_items, opts)?;
     } else {
-        Ok(trimmed.to_owned())
+        let (mut to_move, to_keep): (Vec<Item>, Vec<Item>) =
+            from_df.items.into_iter().partition(|i| i.done_at.is_none());
+
+        for i in &mut to_move {
+            i.migrated_from = Some(from_date);
+        }
+
+        from_df.items = to_keep;
+        to_df.items.extend(to_move);
+
+        save_dayfile(&from_df_path, &from_df)?;
+        save_dayfile(&to_df_path, &to_df)?;
+
+        render_migrate(&to_df, &from_df, &pending_items, opts)?;
     }
-}
 
-fn get_item_priority(priority: Option<&str>) -> ItemPriority {
-    // if let Some(priority) = priority {
-    //     match priority.to_lowercase().as_str() {
-    //         "high" => ItemPriority::High,
-    //         "med" | "medium" => ItemPriority::Medium,
-    //         _ => ItemPriority::Low
-    //     }
-    // } else {
-    //     ItemPriority::Low
-    // }
-
-    match priority.map(|p| p.to_lowercase()) {
-        Some(ref p) if p == "high" => ItemPriority::High,
-        Some(ref p) if p == "med" || p == "medium" => ItemPriority::Medium,
-        _ => ItemPriority::Low,
-    }
-}
-
-fn extract_tags(s: &str) -> Vec<String> {
-    s.split_whitespace()
-        .filter_map(|w| w.strip_prefix('#').map(|t| t.to_string()))
-        .collect()
+    Ok(())
 }
