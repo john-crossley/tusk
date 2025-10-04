@@ -10,8 +10,20 @@ Due to Tusk being under development installation is a bit manual at the moment, 
 ```bash
 brew tap john-crossley/tap
 brew install john-crossley/tap/tusk
-tusk --version # Pro tip: alias tusk to t
+tusk --version
 ```
+
+#### Pro tip: alias tusk to a smaller command, for example `t`
+
+For zsh:
+```bash
+printf "\nalias t='tusk'" >> ~/.zprofile
+```
+For bash:
+```bash
+printf "\nalias t='tusk'" >> ~/.bash_profile
+```
+
 
 ## Usable
 
