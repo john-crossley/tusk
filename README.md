@@ -89,6 +89,7 @@ Edit a task’s text and or notes.
 ```bash
 t edit 4 "Count 🐑 before sleeping"
 t edit 4 -n
+t edit 4 -p high|med|low
 ```
 
 #### Options
