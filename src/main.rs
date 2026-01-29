@@ -4,7 +4,7 @@ use std::{
 };
 
 use chrono::{NaiveDate, Utc};
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 
 mod models;
 mod utils;
@@ -120,6 +120,22 @@ enum Commands {
         #[arg(long = "dry-run")]
         dry_run: bool,
     },
+
+    #[command(
+        name = "review",
+        about = "Grabs a slice of tasks within a specified time period."
+    )]
+    Review {
+        #[arg(name = "period", short, long)]
+        period: Option<Period>,
+    },
+}
+
+#[derive(Debug, Clone, ValueEnum)]
+enum Period {
+    Week,
+    Month,
+    Year,
 }
 
 fn main() {
@@ -154,6 +170,7 @@ fn dispatch(cli: &Cli) -> io::Result<()> {
             to_date,
             dry_run,
         }) => run_migrate(&cli, from_date, to_date, *dry_run),
+        Some(Commands::Review { period }) => run_review(&cli, period),
         None => run_ls(&cli, &None),
     }
 }
@@ -321,6 +338,12 @@ fn prepare_to_migrate_items(from_dayfile: &DayFile) -> Vec<Item> {
         .filter(|i| i.done_at.is_none())
         .cloned()
         .collect()
+}
+
+fn run_review(cli: &Cli, period: &Option<Period>) -> io::Result<()> {
+    println!("You want to {:?}", period);
+
+    Ok(())
 }
 
 fn run_migrate(
