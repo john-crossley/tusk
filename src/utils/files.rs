@@ -61,26 +61,26 @@ pub fn save_dayfile(path: &Path, dayfile: &DayFile) -> Result<(), Error> {
     Ok(())
 }
 
-pub fn load_or_create_dayfile(path: &Path, date: NaiveDate) -> Result<DayFile, Error> {
-    match File::open(path) {
-        Ok(file) => {
-            let buffer = BufReader::new(file);
+pub fn load_dayfile_if_exists(path: &Path) -> Result<DayFile, Error> {
+    let file = File::open(path)?;
+    let reader = BufReader::new(file);
 
-            match serde_json::from_reader(buffer) {
-                Ok(dayfile) => Ok(dayfile),
-                Err(e) => Err(Error::new(
-                    ErrorKind::InvalidData,
-                    format!("read {} failed: {}", path.display(), e),
-                )),
-            }
-        }
-        Err(e) => match e.kind() {
-            io::ErrorKind::NotFound => create_new_dayfile(path, date),
-            _ => Err(Error::new(
-                ErrorKind::Other,
-                format!("open {} failed: {}", path.display(), e),
-            )),
-        },
+    serde_json::from_reader(reader).map_err(|e| {
+        Error::new(
+            ErrorKind::InvalidData,
+            format!("failed to parse JSON in {}: {}", path.display(), e),
+        )
+    })
+}
+
+pub fn load_or_create_dayfile(path: &Path, date: NaiveDate) -> Result<DayFile, Error> {
+    match load_dayfile_if_exists(path) {
+        Ok(df) => Ok(df),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => create_new_dayfile(path, date),
+        Err(e) => Err(Error::new(
+            e.kind(),
+            format!("failed to load {}: {}", path.display(), e),
+        )),
     }
 }
 

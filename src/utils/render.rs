@@ -7,6 +7,7 @@ use crate::models::{
     item::{Item, ItemPriority},
 };
 
+#[derive(Clone)]
 pub struct RenderOpts {
     pub json: bool,
     pub verbose: bool,
@@ -153,11 +154,11 @@ fn render_migration_count(
 pub fn as_json(mut out: impl Write, dayfile: &DayFile) -> Result<(), Error> {
     serde_json::to_writer_pretty(&mut out, &dayfile)?;
     writeln!(out)?;
-    
+
     Ok(())
 }
 
-pub fn render(dayfile: &DayFile, opts: RenderOpts) -> Result<(), Error> {
+pub fn render(dayfile: &DayFile, opts: &RenderOpts) -> Result<(), Error> {
     let mut stdout = io::stdout().lock();
 
     if opts.json {
@@ -303,13 +304,17 @@ fn build_title_header(
     df: &DayFile,
     vault_name: Option<&str>,
     migration: Option<&DayFile>,
-    theme: &Theme
+    theme: &Theme,
 ) -> String {
     let date_str = df.date.format("%a %d %b %Y").to_string();
 
     let mut title = if let Some(from_df) = migration {
         let from_date_str = from_df.date.format("%a %d %b %Y").to_string();
-        format!("Migration from {} → {}", theme.info(&from_date_str), theme.info(&date_str))
+        format!(
+            "Migration from {} → {}",
+            theme.info(&from_date_str),
+            theme.info(&date_str)
+        )
     } else {
         format!("Tasks for: {}", date_str)
     };

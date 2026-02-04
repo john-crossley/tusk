@@ -3,8 +3,8 @@ use std::{
     path::PathBuf,
 };
 
-use chrono::{NaiveDate, Utc};
-use clap::{Parser, Subcommand, ValueEnum};
+use chrono::{Days, NaiveDate, Utc};
+use clap::{Parser, Subcommand};
 
 mod models;
 mod utils;
@@ -14,7 +14,9 @@ use crate::{
     utils::{
         dates::{parse_ymd, today_date},
         editor::edit_in_editor,
-        files::{load_or_create_dayfile, resolve_day_file_path, save_dayfile},
+        files::{
+            load_dayfile_if_exists, load_or_create_dayfile, resolve_day_file_path, save_dayfile,
+        },
         helpers::{
             current_day_context, extract_tags, get_item_priority, sanitise_str, validate_index,
         },
@@ -126,16 +128,9 @@ enum Commands {
         about = "Grabs a slice of tasks within a specified time period."
     )]
     Review {
-        #[arg(name = "period", short, long)]
-        period: Option<Period>,
+        #[arg(name = "days", long)]
+        days: Option<u64>,
     },
-}
-
-#[derive(Debug, Clone, ValueEnum)]
-enum Period {
-    Week,
-    Month,
-    Year,
 }
 
 fn main() {
@@ -170,7 +165,7 @@ fn dispatch(cli: &Cli) -> io::Result<()> {
             to_date,
             dry_run,
         }) => run_migrate(&cli, from_date, to_date, *dry_run),
-        Some(Commands::Review { period }) => run_review(&cli, period),
+        Some(Commands::Review { days }) => run_review(&cli, *days),
         None => run_ls(&cli, &None),
     }
 }
@@ -234,7 +229,7 @@ fn run_ls(cli: &Cli, tags: &Option<Vec<String>>) -> io::Result<()> {
 
     render(
         &dayfile,
-        RenderOpts {
+        &RenderOpts {
             json: cli.json,
             verbose: cli.verbose,
             no_color: cli.no_colour,
@@ -340,8 +335,40 @@ fn prepare_to_migrate_items(from_dayfile: &DayFile) -> Vec<Item> {
         .collect()
 }
 
-fn run_review(cli: &Cli, period: &Option<Period>) -> io::Result<()> {
-    println!("You want to {:?}", period);
+fn run_review(cli: &Cli, days: Option<u64>) -> io::Result<()> {
+    let days = days.unwrap_or(1);
+    let today = today_date();
+
+    let start = today
+        .checked_sub_days(Days::new(days))
+        .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "data underflow"))?;
+
+    let end = today;
+
+    let opts = RenderOpts {
+        json: cli.json,
+        verbose: cli.verbose,
+        no_color: cli.no_colour,
+        vault_name: None,
+        dry_run: false,
+    };
+
+    for d in start.iter_days().take_while(|d| *d < end) {
+        let path = resolve_day_file_path(
+            &d,
+            cli.data_dir.as_deref(),
+            cli.verbose,
+            cli.vault.as_deref(),
+        )?;
+
+        if let Ok(df) = load_dayfile_if_exists(&path) {
+            if df.items.is_empty() {
+                continue;
+            }
+
+            render(&df, &opts)?;
+        }
+    }
 
     Ok(())
 }
