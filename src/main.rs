@@ -12,7 +12,7 @@ mod utils;
 use crate::{
     models::{dayfile::DayFile, item::Item},
     utils::{
-        dates::{parse_ymd, today_date},
+        dates::{parse_ymd, todays_date},
         editor::edit_in_editor,
         files::{
             load_dayfile_if_exists, load_or_create_dayfile, resolve_day_file_path, save_dayfile,
@@ -20,7 +20,7 @@ use crate::{
         helpers::{
             current_day_context, extract_tags, get_item_priority, sanitise_str, validate_index,
         },
-        render::{RenderOpts, render, render_migrate, render_summary},
+        render::{RenderOpts, render, render_migrate, render_review_dayfile, render_review_title, render_summary},
     },
 };
 
@@ -209,6 +209,7 @@ fn run_add(
                 no_color: cli.no_colour,
                 vault_name: None,
                 dry_run: false,
+                ..Default::default()
             },
         )?;
     }
@@ -235,6 +236,7 @@ fn run_ls(cli: &Cli, tags: &Option<Vec<String>>) -> io::Result<()> {
             no_color: cli.no_colour,
             vault_name: None,
             dry_run: false,
+            ..Default::default()
         },
     )?;
 
@@ -319,6 +321,7 @@ fn run_show(cli: &Cli, idx: usize) -> io::Result<()> {
                 no_color: cli.no_colour,
                 vault_name: None,
                 dry_run: false,
+                ..Default::default()
             },
         )?;
     }
@@ -337,7 +340,7 @@ fn prepare_to_migrate_items(from_dayfile: &DayFile) -> Vec<Item> {
 
 fn run_review(cli: &Cli, days: Option<u64>) -> io::Result<()> {
     let days = days.unwrap_or(1);
-    let today = today_date();
+    let today = todays_date();
 
     let start = today
         .checked_sub_days(Days::new(days))
@@ -351,7 +354,12 @@ fn run_review(cli: &Cli, days: Option<u64>) -> io::Result<()> {
         no_color: cli.no_colour,
         vault_name: None,
         dry_run: false,
+        ..Default::default()
     };
+
+    render_review_title(&start, &end, days, &opts)?;
+
+    // We need to compute the data we need first.
 
     for d in start.iter_days().take_while(|d| *d < end) {
         let path = resolve_day_file_path(
@@ -366,7 +374,7 @@ fn run_review(cli: &Cli, days: Option<u64>) -> io::Result<()> {
                 continue;
             }
 
-            render(&df, &opts)?;
+            render_review_dayfile(&df, &opts)?;
         }
     }
 
@@ -379,8 +387,8 @@ fn run_migrate(
     to_date: &Option<NaiveDate>,
     dry_run: bool,
 ) -> io::Result<()> {
-    let from_date = from_date.unwrap_or_else(today_date);
-    let to_date = to_date.unwrap_or_else(today_date);
+    let from_date = from_date.unwrap_or_else(todays_date);
+    let to_date = to_date.unwrap_or_else(todays_date);
 
     if from_date == to_date {
         return Err(io::Error::new(
@@ -413,6 +421,7 @@ fn run_migrate(
         no_color: cli.no_colour,
         vault_name: None,
         dry_run,
+        ..Default::default()
     };
 
     if dry_run {

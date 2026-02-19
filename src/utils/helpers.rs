@@ -2,7 +2,7 @@ use std::{io::{self, Error}, path::PathBuf};
 
 use chrono::NaiveDate;
 
-use crate::{models::item::ItemPriority, utils::{dates::today_date, files::resolve_day_file_path}, Cli};
+use crate::{models::item::ItemPriority, utils::{dates::todays_date, files::resolve_day_file_path}, Cli};
 
 pub fn validate_index(i: usize, len: usize) -> io::Result<usize> {
     if i == 0 || i > len {
@@ -16,7 +16,7 @@ pub fn validate_index(i: usize, len: usize) -> io::Result<usize> {
 }
 
 pub fn current_day_context(cli: &Cli) -> Result<(NaiveDate, PathBuf), Error> {
-    let date = cli.date.unwrap_or_else(today_date);
+    let date = cli.date.unwrap_or_else(todays_date);
 
     let path = resolve_day_file_path(
         &date,

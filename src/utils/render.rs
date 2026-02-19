@@ -7,13 +7,33 @@ use crate::models::{
     item::{Item, ItemPriority},
 };
 
+#[derive(Clone, PartialEq)]
+pub enum RenderOutput {
+    Json,
+    Markdown
+}
+
 #[derive(Clone)]
 pub struct RenderOpts {
-    pub json: bool,
+    pub output: RenderOutput,
     pub verbose: bool,
     pub no_color: bool,
     pub vault_name: Option<String>,
     pub dry_run: bool,
+    pub markdown: bool,
+}
+
+impl Default for RenderOpts {
+    fn default() -> Self {
+        RenderOpts {
+            output: RenderOutput::Json,
+            verbose: false,
+            no_color: true,
+            vault_name: None,
+            dry_run: false,
+            markdown: false,
+        }
+    }
 }
 
 struct Theme {
@@ -58,6 +78,14 @@ impl Theme {
         }
     }
 
+    fn info_em(&self, s: &str) -> ColoredString {
+        if !self.color {
+            return s.normal();
+        }
+
+        s.blue().dimmed().bold().italic()
+    }
+
     fn checkbox(&self, done: bool) -> &'static str {
         if self.color && io::stdout().is_terminal() {
             if done { "☑" } else { "☐" }
@@ -93,7 +121,7 @@ pub fn render_migrate(
 ) -> Result<(), Error> {
     let mut stdout = io::stdout().lock();
 
-    if opts.json {
+    if opts.output == RenderOutput::Json {
         return as_json(stdout, &to_df);
     }
 
@@ -161,7 +189,7 @@ pub fn as_json(mut out: impl Write, dayfile: &DayFile) -> Result<(), Error> {
 pub fn render(dayfile: &DayFile, opts: &RenderOpts) -> Result<(), Error> {
     let mut stdout = io::stdout().lock();
 
-    if opts.json {
+    if opts.output == RenderOutput::Json {
         return as_json(stdout, &dayfile);
     }
 
@@ -205,7 +233,7 @@ fn format_text(s: &str, theme: &Theme) -> String {
 pub fn render_summary(idx: Option<usize>, item: &Item, opts: RenderOpts) -> io::Result<()> {
     let mut out = io::stdout().lock();
 
-    if opts.json {
+    if opts.output == RenderOutput::Json {
         serde_json::to_writer_pretty(&mut out, &item)?;
         writeln!(&mut out)?;
         return Ok(());
@@ -300,6 +328,55 @@ fn repeat_char(c: char, n: usize) -> String {
     s
 }
 
+pub fn render_review_title(
+    start: &NaiveDate,
+    end: &NaiveDate,
+    days: u64,
+    opts: &RenderOpts,
+) -> io::Result<()> {
+    let mut out = io::stdout().lock();
+
+    let theme = Theme::new(opts.no_color);
+
+    let formatted_start = start.format("%a %d %b %Y").to_string();
+    let formatted_end = end.format("%a %d %b %Y").to_string();
+    let title = format!("Review: {} → {}", formatted_start, formatted_end);
+
+    writeln!(&mut out, "\n🦣 {}", theme.title(title.as_str()))?;
+
+    let sub = format!("Last {} day(s) (excluding today)", days);
+    writeln!(&mut out, "{}", theme.info_em(sub.as_str()))?;
+
+    writeln!(&mut out, "\n{}", theme.title("Summary"))?;
+    writeln!(&mut out, "- Total tasks: 18")?;
+    writeln!(&mut out, "- Open: 13")?;
+    writeln!(&mut out, "- Completed: 5")?;
+    writeln!(&mut out, "- Days with activity: 4")?;
+
+    writeln!(&mut out, "---")?;
+
+    Ok(())
+}
+
+pub fn render_review_dayfile(df: &DayFile, opts: &RenderOpts) -> io::Result<()> {
+    let mut out = io::stdout().lock();
+    let theme = Theme::new(opts.no_color);
+
+    // ## Tue 16 Sep 2025 (12 tasks: 11 open, 1 done)
+    // - [ ] Hello, World ahaom! ▽
+
+    writeln!(&mut out, "Tue 16 Sep 2025 (12 tasks: 11 open, 1 done)")?;
+
+    for item in &df.items {
+        let is_done = item.done_at.is_some();
+        let boxy = theme.checkbox(is_done);
+
+        writeln!(&mut out, "{} {}", boxy, item.text)?;
+    }
+
+    Ok(())
+}
+
 fn build_title_header(
     df: &DayFile,
     vault_name: Option<&str>,
@@ -343,7 +420,8 @@ fn render_list(
 
     for (idx, i) in items.iter().enumerate() {
         let n = idx + 1;
-        let boxy = theme.checkbox(i.done_at.is_some());
+        let is_done = i.done_at.is_some();
+        let boxy = theme.checkbox(is_done);
 
         let short_id = if verbose {
             let id = format!("({})", abbrev_id(&i.id, 6));
@@ -361,7 +439,7 @@ fn render_list(
 
         let prio = format!(" {}", theme.priority(&i.priority));
 
-        if i.done_at.is_some() {
+        if is_done {
             write!(out, "{}{prio}", theme.dim(&line))?;
         } else {
             write!(out, "{line}{prio}")?;
