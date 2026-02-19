@@ -9,15 +9,15 @@ use crate::models::{
 
 #[derive(Clone, PartialEq)]
 pub enum RenderOutput {
+    Terminal { color: bool },
     Json,
-    Markdown
+    Markdown,
 }
 
 #[derive(Clone)]
 pub struct RenderOpts {
     pub output: RenderOutput,
     pub verbose: bool,
-    pub no_color: bool,
     pub vault_name: Option<String>,
     pub dry_run: bool,
     pub markdown: bool,
@@ -26,9 +26,8 @@ pub struct RenderOpts {
 impl Default for RenderOpts {
     fn default() -> Self {
         RenderOpts {
-            output: RenderOutput::Json,
+            output: RenderOutput::Terminal { color: true },
             verbose: false,
-            no_color: true,
             vault_name: None,
             dry_run: false,
             markdown: false,
@@ -125,7 +124,7 @@ pub fn render_migrate(
         return as_json(stdout, &to_df);
     }
 
-    let theme = Theme::new(opts.no_color);
+    let theme = Theme::new(true); // opts.no_color
     let title = build_title_header(&to_df, opts.vault_name.as_deref(), Some(from_df), &theme);
     title_underline(&theme, &title, &mut stdout)?;
 
@@ -193,7 +192,7 @@ pub fn render(dayfile: &DayFile, opts: &RenderOpts) -> Result<(), Error> {
         return as_json(stdout, &dayfile);
     }
 
-    let theme = Theme::new(opts.no_color);
+    let theme = Theme::new(true);
     let title = build_title_header(&dayfile, opts.vault_name.as_deref(), None, &theme);
     title_underline(&theme, &title, &mut stdout)?;
 
@@ -239,7 +238,7 @@ pub fn render_summary(idx: Option<usize>, item: &Item, opts: RenderOpts) -> io::
         return Ok(());
     }
 
-    let theme = Theme::new(opts.no_color);
+    let theme = Theme::new(true);
     let index = idx.map(|i| i.to_string()).unwrap_or(item.id.to_string());
 
     // Header
@@ -336,7 +335,7 @@ pub fn render_review_title(
 ) -> io::Result<()> {
     let mut out = io::stdout().lock();
 
-    let theme = Theme::new(opts.no_color);
+    let theme = Theme::new(true);
 
     let formatted_start = start.format("%a %d %b %Y").to_string();
     let formatted_end = end.format("%a %d %b %Y").to_string();
@@ -360,7 +359,7 @@ pub fn render_review_title(
 
 pub fn render_review_dayfile(df: &DayFile, opts: &RenderOpts) -> io::Result<()> {
     let mut out = io::stdout().lock();
-    let theme = Theme::new(opts.no_color);
+    let theme = Theme::new(true);
 
     // ## Tue 16 Sep 2025 (12 tasks: 11 open, 1 done)
     // - [ ] Hello, World ahaom! ▽

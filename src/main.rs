@@ -204,9 +204,7 @@ fn run_add(
             None,
             item,
             RenderOpts {
-                json: cli.json,
                 verbose: cli.verbose,
-                no_color: cli.no_colour,
                 vault_name: None,
                 dry_run: false,
                 ..Default::default()
@@ -231,9 +229,7 @@ fn run_ls(cli: &Cli, tags: &Option<Vec<String>>) -> io::Result<()> {
     render(
         &dayfile,
         &RenderOpts {
-            json: cli.json,
             verbose: cli.verbose,
-            no_color: cli.no_colour,
             vault_name: None,
             dry_run: false,
             ..Default::default()
@@ -316,9 +312,7 @@ fn run_show(cli: &Cli, idx: usize) -> io::Result<()> {
             Some(idx),
             item,
             RenderOpts {
-                json: cli.json,
                 verbose: cli.verbose,
-                no_color: cli.no_colour,
                 vault_name: None,
                 dry_run: false,
                 ..Default::default()
@@ -349,9 +343,7 @@ fn run_review(cli: &Cli, days: Option<u64>) -> io::Result<()> {
     let end = today;
 
     let opts = RenderOpts {
-        json: cli.json,
         verbose: cli.verbose,
-        no_color: cli.no_colour,
         vault_name: None,
         dry_run: false,
         ..Default::default()
@@ -416,9 +408,7 @@ fn run_migrate(
     let pending_items = prepare_to_migrate_items(&from_df);
 
     let opts = RenderOpts {
-        json: cli.json,
         verbose: cli.verbose,
-        no_color: cli.no_colour,
         vault_name: None,
         dry_run,
         ..Default::default()
