@@ -1,16 +1,21 @@
 use chrono::NaiveDate;
+use clap::ValueEnum;
 use colored::{ColoredString, Colorize};
 use std::io::{self, Error, IsTerminal, Write};
 
-use crate::models::{
-    dayfile::DayFile,
-    item::{Item, ItemPriority},
+use crate::{
+    Cli,
+    models::{
+        dayfile::DayFile,
+        item::{Item, ItemPriority},
+    },
 };
 
-#[derive(Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, ValueEnum, Copy)]
 pub enum RenderOutput {
-    Terminal { color: bool },
+    Terminal,
     Json,
+    #[value(alias = "md")]
     Markdown,
 }
 
@@ -20,17 +25,29 @@ pub struct RenderOpts {
     pub verbose: bool,
     pub vault_name: Option<String>,
     pub dry_run: bool,
-    pub markdown: bool,
+    pub color: bool,
 }
 
 impl Default for RenderOpts {
     fn default() -> Self {
         RenderOpts {
-            output: RenderOutput::Terminal { color: true },
+            output: RenderOutput::Terminal,
             verbose: false,
             vault_name: None,
             dry_run: false,
-            markdown: false,
+            color: false,
+        }
+    }
+}
+
+impl From<&Cli> for RenderOpts {
+    fn from(cli: &Cli) -> Self {
+        Self {
+            output: cli.output,
+            verbose: cli.verbose,
+            vault_name: cli.vault.clone(),
+            dry_run: false,
+            color: !cli.no_colour,
         }
     }
 }
@@ -40,8 +57,8 @@ struct Theme {
 }
 
 impl Theme {
-    fn new(no_color: bool) -> Self {
-        let color = io::stdout().is_terminal() && !no_color;
+    fn new(color: bool) -> Self {
+        let color = io::stdout().is_terminal() && color;
         Self { color }
     }
 
@@ -124,7 +141,7 @@ pub fn render_migrate(
         return as_json(stdout, &to_df);
     }
 
-    let theme = Theme::new(true); // opts.no_color
+    let theme = Theme::new(true); // opts.color
     let title = build_title_header(&to_df, opts.vault_name.as_deref(), Some(from_df), &theme);
     title_underline(&theme, &title, &mut stdout)?;
 
@@ -192,7 +209,7 @@ pub fn render(dayfile: &DayFile, opts: &RenderOpts) -> Result<(), Error> {
         return as_json(stdout, &dayfile);
     }
 
-    let theme = Theme::new(true);
+    let theme = Theme::new(false);
     let title = build_title_header(&dayfile, opts.vault_name.as_deref(), None, &theme);
     title_underline(&theme, &title, &mut stdout)?;
 

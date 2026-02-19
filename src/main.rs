@@ -6,10 +6,15 @@ use std::{
 use chrono::{Days, NaiveDate, Utc};
 use clap::{Parser, Subcommand};
 
+mod display;
 mod models;
 mod utils;
 
 use crate::{
+    display::{
+        json::JsonRenderer, markdown::MarkdownRenderer, renderer::Renderer,
+        terminal::TerminalRenderer,
+    },
     models::{dayfile::DayFile, item::Item},
     utils::{
         dates::{parse_ymd, todays_date},
@@ -20,7 +25,10 @@ use crate::{
         helpers::{
             current_day_context, extract_tags, get_item_priority, sanitise_str, validate_index,
         },
-        render::{RenderOpts, render, render_migrate, render_review_dayfile, render_review_title, render_summary},
+        render::{
+            RenderOpts, RenderOutput, render_migrate, render_review_dayfile, render_review_title,
+            render_summary,
+        }, theme::Theme,
     },
 };
 
@@ -41,9 +49,9 @@ struct Cli {
     #[arg(long, value_name = "DIR")]
     data_dir: Option<PathBuf>,
 
-    /// Output results as JSON instead of human-readable text.
-    #[arg(short, long)]
-    json: bool,
+    /// Specify the terminal output as Terminal, JSON or markdown.
+    #[arg(short, long, value_enum, default_value_t = RenderOutput::Terminal)]
+    output: RenderOutput,
 
     /// Disable coloured output (useful in scripts or non-TTY environments).
     #[arg(short, long)]
@@ -226,18 +234,34 @@ fn run_ls(cli: &Cli, tags: &Option<Vec<String>>) -> io::Result<()> {
         });
     }
 
-    render(
-        &dayfile,
-        &RenderOpts {
-            verbose: cli.verbose,
-            vault_name: None,
-            dry_run: false,
-            ..Default::default()
-        },
-    )?;
+    let opts: RenderOpts = cli.into();
+    let renderer = make_renderer(&opts);
+
+    renderer.render_day(&dayfile)?;
 
     Ok(())
 }
+
+// match cli.output {
+//     RenderOutput::Terminal => todo!(),
+//     RenderOutput::Json => {
+//         let json_renderer = JsonRenderer {};
+//         json_renderer.render_day(&dayfile)?;
+//     },
+//     RenderOutput::Markdown => todo!()
+// }
+
+// // render(
+// //     &dayfile,
+// //     &RenderOpts {
+// //         verbose: cli.verbose,
+// //         vault_name: None,
+// //         dry_run: false,
+// //         ..Default::default()
+// //     },
+// // )?;
+
+// Ok(())
 
 fn run_done(cli: &Cli, idx: usize, mark_done: bool) -> io::Result<()> {
     let (date, path) = current_day_context(cli)?;
@@ -436,4 +460,32 @@ fn run_migrate(
     }
 
     Ok(())
+}
+
+fn make_renderer(opts: &RenderOpts) -> RendererImpl {
+    match opts.output {
+        RenderOutput::Terminal => RendererImpl::Terminal(TerminalRenderer {
+            theme: Theme::new(opts.color),
+            vault: opts.vault_name.clone(),
+            verbose: opts.verbose,
+        }),
+        RenderOutput::Json => RendererImpl::Json(JsonRenderer {}),
+        RenderOutput::Markdown => RendererImpl::Markdown(MarkdownRenderer {}),
+    }
+}
+
+enum RendererImpl {
+    Terminal(TerminalRenderer),
+    Json(JsonRenderer),
+    Markdown(MarkdownRenderer),
+}
+
+impl RendererImpl {
+    fn render_day(&self, df: &DayFile) -> io::Result<()> {
+        match self {
+            RendererImpl::Terminal(r) => r.render_day(df),
+            RendererImpl::Json(r) => r.render_day(df),
+            RendererImpl::Markdown(r) => r.render_day(df),
+        }
+    }
 }
