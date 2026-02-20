@@ -19,6 +19,17 @@ impl Renderer for JsonRenderer {
         Self::to_json(item)?;
         Ok(())
     }
+
+    fn render_migrate(
+        &self,
+        to_df: &DayFile,
+        _from_df: &DayFile,
+        _items: &[Item],
+        _dry_run: bool,
+    ) -> Result<(), std::io::Error> {
+        Self::to_json(to_df)?;
+        Ok(())
+    }
 }
 
 impl JsonRenderer {

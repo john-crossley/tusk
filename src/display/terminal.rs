@@ -1,3 +1,4 @@
+use chrono::NaiveDate;
 use colored::Colorize;
 use std::io::{self, Error, Write};
 
@@ -14,21 +15,21 @@ pub struct TerminalRenderer {
 }
 
 impl Renderer for TerminalRenderer {
-    fn render_day(&self, df: &DayFile) -> Result<(), std::io::Error> {
-        let title = self.build_title_header(df);
+    fn render_day(&self, df: &DayFile) -> Result<(), Error> {
         let mut out = io::stdout().lock();
 
+        let title = self.build_title_header(df, None);
         Self::title_underline(&self.theme, &title, &mut out)?;
 
         if df.items.is_empty() {
             writeln!(
-                &mut out,
+                out,
                 "🦣 {}",
                 self.theme.dim(&format!("No tasks for {}", df.date))
             )?;
 
             let hint = r#"tusk add "Drink more water 💦""#;
-            writeln!(&mut out, "   Add one with: {}", self.theme.ok(hint))?;
+            writeln!(out, "   Add one with: {}", self.theme.ok(hint))?;
 
             return Ok(());
         }
@@ -45,7 +46,7 @@ impl Renderer for TerminalRenderer {
 
         // Header
         writeln!(
-            &mut out,
+            out,
             "{}  {}",
             self.theme.info(&format!("#{}", index)),
             Self::format_text(&item.text, &self.theme)
@@ -53,7 +54,7 @@ impl Renderer for TerminalRenderer {
 
         // Priority
         writeln!(
-            &mut out,
+            out,
             "    {} {}",
             self.theme.dim("Priority:"),
             self.theme.priority(&item.priority)
@@ -68,12 +69,12 @@ impl Renderer for TerminalRenderer {
                 .collect::<Vec<_>>()
                 .join("  ");
 
-            writeln!(&mut out, "    {} {}", self.theme.dim("Tags:"), tags)?;
+            writeln!(out, "    {} {}", self.theme.dim("Tags:"), tags)?;
         }
 
         // Created
         writeln!(
-            &mut out,
+            out,
             "    {} {}",
             self.theme.dim("Created:"),
             item.created_at.format("%Y-%m-%d %H:%M")
@@ -85,11 +86,11 @@ impl Renderer for TerminalRenderer {
             None => "not yet".into(),
         };
 
-        writeln!(&mut out, "    {} {}", self.theme.dim("Done:"), done_s)?;
+        writeln!(out, "    {} {}", self.theme.dim("Done:"), done_s)?;
 
         if let Some(migrated_from) = item.migrated_from {
             writeln!(
-                &mut out,
+                out,
                 "    {} {}",
                 self.theme.dim("Migrated from:"),
                 migrated_from.format("%Y-%m-%d").to_string()
@@ -98,31 +99,59 @@ impl Renderer for TerminalRenderer {
 
         // Notes
         if let Some(n) = &item.notes {
-            writeln!(&mut out, "    {} ", self.theme.dim("Notes:"))?;
+            writeln!(out, "    {} ", self.theme.dim("Notes:"))?;
             for line in n.lines() {
-                writeln!(&mut out, "      {}", line)?;
+                writeln!(out, "      {}", line)?;
             }
         }
+
+        Ok(())
+    }
+
+    fn render_migrate(
+        &self,
+        to_df: &DayFile,
+        from_df: &DayFile,
+        items: &[Item],
+        dry_run: bool,
+    ) -> Result<(), Error> {
+        let mut out = io::stdout().lock();
+
+        let title = self.build_title_header(to_df, Some(from_df));
+        Self::title_underline(&self.theme, &title, &mut out)?;
+
+        if items.is_empty() {
+            writeln!(
+                out,
+                "🦣 {}",
+                self.theme
+                    .dim(&format!("No tasks to migrate from {} 🐘", from_df.date))
+            )?;
+
+            return Ok(());
+        }
+
+        self.render_list(&mut out, items)?;
+        self.render_migratation_count(&mut out, items, from_df.date, dry_run)?;
 
         Ok(())
     }
 }
 
 impl TerminalRenderer {
-    fn build_title_header(&self, df: &DayFile) -> String {
+    fn build_title_header(&self, df: &DayFile, migration: Option<&DayFile>) -> String {
         let date_str = df.date.format("%a %d %b %Y").to_string();
-        let mut title = format!("Tasks for: {}", date_str);
 
-        // let mut title = if let Some(from_df) = migration {
-        //     let from_date_str = from_df.date.format("%a %d %b %Y").to_string();
-        //     format!(
-        //         "Migration from {} → {}",
-        //         theme.info(&from_date_str),
-        //         theme.info(&date_str)
-        //     )
-        // } else {
-        //     format!("Tasks for: {}", date_str)
-        // };
+        let mut title = if let Some(from_df) = migration {
+            let from_date_str = from_df.date.format("%a %d %b %Y").to_string();
+            format!(
+                "Migration from {} → {}",
+                self.theme.info(&from_date_str),
+                self.theme.info(&date_str)
+            )
+        } else {
+            format!("Tasks for: {}", date_str)
+        };
 
         if let Some(v) = &self.vault {
             title.push_str(&format!(" • vault: {}", v));
@@ -183,6 +212,40 @@ impl TerminalRenderer {
             &self.theme.info(&total.to_string()),
             &self.theme.warn(&open.to_string()),
             &self.theme.ok(&completed.to_string())
+        )?;
+
+        Ok(())
+    }
+
+    fn render_migratation_count(
+        &self,
+        out: &mut impl Write,
+        items: &[Item],
+        date: NaiveDate,
+        dry_run: bool,
+    ) -> Result<(), Error> {
+        let count = items.len();
+
+        if count == 0 {
+            return Ok(());
+        }
+
+        let item_word = if count == 1 { "item" } else { "items" };
+        let details = if dry_run {
+            "will be migrated from:"
+        } else {
+            "migrated:"
+        };
+
+        let date_str = date.format("%a %d %b %Y").to_string();
+
+        writeln!(
+            out,
+            "  ↪ {} {} {} {}",
+            self.theme.info(&count.to_string()),
+            item_word,
+            details,
+            self.theme.info(&date_str)
         )?;
 
         Ok(())

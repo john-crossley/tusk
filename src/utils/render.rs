@@ -25,20 +25,7 @@ pub struct RenderOpts {
     pub output: RenderOutput,
     pub verbose: bool,
     pub vault_name: Option<String>,
-    pub dry_run: bool,
     pub color: bool,
-}
-
-impl Default for RenderOpts {
-    fn default() -> Self {
-        RenderOpts {
-            output: RenderOutput::Terminal,
-            verbose: false,
-            vault_name: None,
-            dry_run: false,
-            color: false,
-        }
-    }
 }
 
 impl From<&Cli> for RenderOpts {
@@ -47,7 +34,6 @@ impl From<&Cli> for RenderOpts {
             output: cli.output,
             verbose: cli.verbose,
             vault_name: cli.vault.clone(),
-            dry_run: false,
             color: !cli.no_colour,
         }
     }
@@ -71,11 +57,11 @@ pub fn render_migrate(
     // title_underline(&theme, &title, &mut stdout)?;
 
     // if items.is_empty() {
-    //     writeln!(
-    //         &mut stdout,
-    //         "🦣 {}",
-    //         theme.dim(&format!("No tasks to migrate from {}", from_df.date))
-    //     )?;
+    // writeln!(
+    //     &mut stdout,
+    //     "🦣 {}",
+    //     theme.dim(&format!("No tasks to migrate from {}", from_df.date))
+    // )?;
 
     //     return Ok(());
     // }
@@ -201,6 +187,20 @@ impl RendererImpl {
             RendererImpl::Terminal(r) => r.render_summary(index, item),
             RendererImpl::Json(r) => r.render_summary(index, item),
             RendererImpl::Markdown(r) => r.render_summary(index, item),
+        }
+    }
+
+    pub fn render_migrate(
+        &self,
+        to_df: &DayFile,
+        from_df: &DayFile,
+        items: &[Item],
+        dry_run: bool,
+    ) -> io::Result<()> {
+        match self {
+            RendererImpl::Terminal(r) => r.render_migrate(to_df, from_df, items, dry_run),
+            RendererImpl::Json(r) => r.render_migrate(to_df, from_df, items, dry_run),
+            RendererImpl::Markdown(r) => r.render_migrate(to_df, from_df, items, dry_run),
         }
     }
 }

@@ -4,5 +4,12 @@ use crate::models::{dayfile::DayFile, item::Item};
 
 pub trait Renderer {
     fn render_day(&self, df: &DayFile) -> Result<(), Error>;
-    fn render_summary(&self, index: Option<usize>, item: &Item) -> Result<(), std::io::Error>;
+    fn render_summary(&self, index: Option<usize>, item: &Item) -> Result<(), Error>;
+    fn render_migrate(
+        &self,
+        to_df: &DayFile,
+        from_df: &DayFile,
+        items: &[Item],
+        dry_run: bool,
+    ) -> Result<(), Error>;
 }

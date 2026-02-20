@@ -3,7 +3,7 @@ use std::{
     path::PathBuf,
 };
 
-use chrono::{Days, NaiveDate, Utc};
+use chrono::{NaiveDate, Utc};
 use clap::{Parser, Subcommand};
 
 mod display;
@@ -11,22 +11,24 @@ mod models;
 mod utils;
 
 use crate::{
-    display::renderer::Renderer,
-    models::{dayfile::DayFile, item::Item},
+    models::item::Item,
     utils::{
         dates::{parse_ymd, todays_date},
         editor::edit_in_editor,
-        files::{
-            load_dayfile_if_exists, load_or_create_dayfile, resolve_day_file_path, save_dayfile,
-        },
+        files::{load_or_create_dayfile, resolve_day_file_path, save_dayfile},
         helpers::{
             current_day_context, extract_tags, get_item_priority, sanitise_str, validate_index,
         },
-        render::{
-            RenderOpts, RenderOutput, make_renderer, render_migrate, render_review_dayfile, render_review_title
-        },
+        render::{RenderOpts, RenderOutput, make_renderer},
     },
 };
+
+
+///
+/// Tasks to complete
+/// 1. Remove the date variable from the global args scope.
+/// 2. Can the from, to dates accept "today", "tomorrow", "yesterday"?
+/// 
 
 #[derive(Parser, Debug)]
 #[command(
@@ -309,54 +311,46 @@ fn run_show(cli: &Cli, idx: usize) -> io::Result<()> {
     Ok(())
 }
 
-fn prepare_to_migrate_items(from_dayfile: &DayFile) -> Vec<Item> {
-    from_dayfile
-        .items
-        .iter()
-        .filter(|i| i.done_at.is_none())
-        .cloned()
-        .collect()
-}
-
 fn run_review(cli: &Cli, days: Option<u64>) -> io::Result<()> {
-    let days = days.unwrap_or(1);
-    let today = todays_date();
+    todo!()
+    // let days = days.unwrap_or(1);
+    // let today = todays_date();
 
-    let start = today
-        .checked_sub_days(Days::new(days))
-        .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "data underflow"))?;
+    // let start = today
+    //     .checked_sub_days(Days::new(days))
+    //     .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "data underflow"))?;
 
-    let end = today;
+    // let end = today;
 
-    let opts = RenderOpts {
-        verbose: cli.verbose,
-        vault_name: None,
-        dry_run: false,
-        ..Default::default()
-    };
+    // let opts = RenderOpts {
+    //     verbose: cli.verbose,
+    //     vault_name: None,
+    //     dry_run: false,
+    //     ..Default::default()
+    // };
 
-    render_review_title(&start, &end, days, &opts)?;
+    // render_review_title(&start, &end, days, &opts)?;
 
-    // We need to compute the data we need first.
+    // // We need to compute the data we need first.
 
-    for d in start.iter_days().take_while(|d| *d < end) {
-        let path = resolve_day_file_path(
-            &d,
-            cli.data_dir.as_deref(),
-            cli.verbose,
-            cli.vault.as_deref(),
-        )?;
+    // for d in start.iter_days().take_while(|d| *d < end) {
+    //     let path = resolve_day_file_path(
+    //         &d,
+    //         cli.data_dir.as_deref(),
+    //         cli.verbose,
+    //         cli.vault.as_deref(),
+    //     )?;
 
-        if let Ok(df) = load_dayfile_if_exists(&path) {
-            if df.items.is_empty() {
-                continue;
-            }
+    //     if let Ok(df) = load_dayfile_if_exists(&path) {
+    //         if df.items.is_empty() {
+    //             continue;
+    //         }
 
-            render_review_dayfile(&df, &opts)?;
-        }
-    }
+    //         render_review_dayfile(&df, &opts)?;
+    //     }
+    // }
 
-    Ok(())
+    // Ok(())
 }
 
 fn run_migrate(
@@ -391,19 +385,15 @@ fn run_migrate(
 
     let mut from_df = load_or_create_dayfile(&from_df_path, from_date)?;
     let mut to_df = load_or_create_dayfile(&to_df_path, to_date)?;
-    let pending_items = prepare_to_migrate_items(&from_df);
+    let pending_items = &from_df.migratable_items();
+    let opts: RenderOpts = cli.into();
 
-    let opts = RenderOpts {
-        verbose: cli.verbose,
-        vault_name: None,
-        dry_run,
-        ..Default::default()
-    };
+    let renderer = make_renderer(&opts);
 
     if dry_run {
         let mut preview = to_df.clone();
         preview.items.extend_from_slice(&pending_items);
-        render_migrate(&preview, &from_df, &pending_items, opts)?;
+        renderer.render_migrate(&preview, &from_df, pending_items, true)?;
     } else {
         let (mut to_move, to_keep): (Vec<Item>, Vec<Item>) =
             from_df.items.into_iter().partition(|i| i.done_at.is_none());
@@ -418,7 +408,7 @@ fn run_migrate(
         save_dayfile(&from_df_path, &from_df)?;
         save_dayfile(&to_df_path, &to_df)?;
 
-        render_migrate(&to_df, &from_df, &pending_items, opts)?;
+        renderer.render_migrate(&to_df, &from_df, pending_items, false)?;
     }
 
     Ok(())
