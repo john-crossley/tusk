@@ -11,10 +11,7 @@ mod models;
 mod utils;
 
 use crate::{
-    display::{
-        json::JsonRenderer, markdown::MarkdownRenderer, renderer::Renderer,
-        terminal::TerminalRenderer,
-    },
+    display::renderer::Renderer,
     models::{dayfile::DayFile, item::Item},
     utils::{
         dates::{parse_ymd, todays_date},
@@ -26,9 +23,8 @@ use crate::{
             current_day_context, extract_tags, get_item_priority, sanitise_str, validate_index,
         },
         render::{
-            RenderOpts, RenderOutput, render_migrate, render_review_dayfile, render_review_title,
-            render_summary,
-        }, theme::Theme,
+            RenderOpts, RenderOutput, make_renderer, render_migrate, render_review_dayfile, render_review_title
+        },
     },
 };
 
@@ -190,7 +186,7 @@ fn run_add(
     let tags = extract_tags(text);
 
     let (date, path) = current_day_context(cli)?;
-    let mut dayfile = load_or_create_dayfile(&path, date)?;
+    let mut df = load_or_create_dayfile(&path, date)?;
 
     let notes = if *attach_notes {
         Some(edit_in_editor("# Notes")?)
@@ -198,26 +194,20 @@ fn run_add(
         None
     };
 
-    dayfile.items.push(Item::new(
+    df.items.push(Item::new(
         new_text,
         get_item_priority(priority),
         tags,
         notes,
     ));
 
-    save_dayfile(&path, &dayfile)?;
+    save_dayfile(&path, &df)?;
 
-    if let Some(item) = dayfile.items.last() {
-        render_summary(
-            None,
-            item,
-            RenderOpts {
-                verbose: cli.verbose,
-                vault_name: None,
-                dry_run: false,
-                ..Default::default()
-            },
-        )?;
+    if let Some(item) = df.items.last() {
+        let opts: RenderOpts = cli.into();
+        let renderer = make_renderer(&opts);
+
+        renderer.render_summary(None, item)?;
     }
 
     Ok(())
@@ -241,27 +231,6 @@ fn run_ls(cli: &Cli, tags: &Option<Vec<String>>) -> io::Result<()> {
 
     Ok(())
 }
-
-// match cli.output {
-//     RenderOutput::Terminal => todo!(),
-//     RenderOutput::Json => {
-//         let json_renderer = JsonRenderer {};
-//         json_renderer.render_day(&dayfile)?;
-//     },
-//     RenderOutput::Markdown => todo!()
-// }
-
-// // render(
-// //     &dayfile,
-// //     &RenderOpts {
-// //         verbose: cli.verbose,
-// //         vault_name: None,
-// //         dry_run: false,
-// //         ..Default::default()
-// //     },
-// // )?;
-
-// Ok(())
 
 fn run_done(cli: &Cli, idx: usize, mark_done: bool) -> io::Result<()> {
     let (date, path) = current_day_context(cli)?;
@@ -332,16 +301,9 @@ fn run_show(cli: &Cli, idx: usize) -> io::Result<()> {
     let pos = validate_index(idx, dayfile.items.len())?;
 
     if let Some(item) = dayfile.items.get_mut(pos) {
-        render_summary(
-            Some(idx),
-            item,
-            RenderOpts {
-                verbose: cli.verbose,
-                vault_name: None,
-                dry_run: false,
-                ..Default::default()
-            },
-        )?;
+        let opts: RenderOpts = cli.into();
+        let renderer = make_renderer(&opts);
+        renderer.render_summary(Some(idx), item)?;
     }
 
     Ok(())
@@ -460,32 +422,4 @@ fn run_migrate(
     }
 
     Ok(())
-}
-
-fn make_renderer(opts: &RenderOpts) -> RendererImpl {
-    match opts.output {
-        RenderOutput::Terminal => RendererImpl::Terminal(TerminalRenderer {
-            theme: Theme::new(opts.color),
-            vault: opts.vault_name.clone(),
-            verbose: opts.verbose,
-        }),
-        RenderOutput::Json => RendererImpl::Json(JsonRenderer {}),
-        RenderOutput::Markdown => RendererImpl::Markdown(MarkdownRenderer {}),
-    }
-}
-
-enum RendererImpl {
-    Terminal(TerminalRenderer),
-    Json(JsonRenderer),
-    Markdown(MarkdownRenderer),
-}
-
-impl RendererImpl {
-    fn render_day(&self, df: &DayFile) -> io::Result<()> {
-        match self {
-            RendererImpl::Terminal(r) => r.render_day(df),
-            RendererImpl::Json(r) => r.render_day(df),
-            RendererImpl::Markdown(r) => r.render_day(df),
-        }
-    }
 }

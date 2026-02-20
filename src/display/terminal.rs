@@ -1,12 +1,10 @@
-use colored::{Colorize};
+use colored::Colorize;
 use std::io::{self, Error, Write};
 
 use crate::{
     display::renderer::Renderer,
-    models::{
-        dayfile::DayFile,
-        item::Item,
-    }, utils::theme::Theme,
+    models::{dayfile::DayFile, item::Item},
+    utils::theme::Theme,
 };
 
 pub struct TerminalRenderer {
@@ -37,6 +35,74 @@ impl Renderer for TerminalRenderer {
 
         self.render_list(&mut out, &df.items)?;
         self.render_footer(&mut out, df)?;
+
+        Ok(())
+    }
+
+    fn render_summary(&self, index: Option<usize>, item: &Item) -> Result<(), Error> {
+        let mut out = io::stdout().lock();
+        let index = index.map(|i| i.to_string()).unwrap_or(item.id.to_string());
+
+        // Header
+        writeln!(
+            &mut out,
+            "{}  {}",
+            self.theme.info(&format!("#{}", index)),
+            Self::format_text(&item.text, &self.theme)
+        )?;
+
+        // Priority
+        writeln!(
+            &mut out,
+            "    {} {}",
+            self.theme.dim("Priority:"),
+            self.theme.priority(&item.priority)
+        )?;
+
+        // Tags
+        if !item.tags.is_empty() {
+            let tags = item
+                .tags
+                .iter()
+                .map(|t| format!("#{}", t))
+                .collect::<Vec<_>>()
+                .join("  ");
+
+            writeln!(&mut out, "    {} {}", self.theme.dim("Tags:"), tags)?;
+        }
+
+        // Created
+        writeln!(
+            &mut out,
+            "    {} {}",
+            self.theme.dim("Created:"),
+            item.created_at.format("%Y-%m-%d %H:%M")
+        )?;
+
+        // Done
+        let done_s = match &item.done_at {
+            Some(ts) => ts.format("%Y-%m-%d %H:%M").to_string(),
+            None => "not yet".into(),
+        };
+
+        writeln!(&mut out, "    {} {}", self.theme.dim("Done:"), done_s)?;
+
+        if let Some(migrated_from) = item.migrated_from {
+            writeln!(
+                &mut out,
+                "    {} {}",
+                self.theme.dim("Migrated from:"),
+                migrated_from.format("%Y-%m-%d").to_string()
+            )?;
+        }
+
+        // Notes
+        if let Some(n) = &item.notes {
+            writeln!(&mut out, "    {} ", self.theme.dim("Notes:"))?;
+            for line in n.lines() {
+                writeln!(&mut out, "      {}", line)?;
+            }
+        }
 
         Ok(())
     }

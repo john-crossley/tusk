@@ -1,4 +1,4 @@
-use crate::display::renderer::Renderer;
+use crate::{display::renderer::Renderer, models::{dayfile::DayFile, item::Item}};
 
 pub struct MarkdownRenderer;
 
@@ -7,5 +7,9 @@ impl Renderer for MarkdownRenderer {
         println!("Markdown Renderer");
 
         Ok(())
+    }
+
+    fn render_summary(&self, index: Option<usize>, item: &Item) -> Result<(), std::io::Error> {
+        todo!()
     }
 }
