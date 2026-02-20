@@ -311,48 +311,6 @@ fn run_show(cli: &Cli, idx: usize) -> io::Result<()> {
     Ok(())
 }
 
-fn run_review(cli: &Cli, days: Option<u64>) -> io::Result<()> {
-    todo!()
-    // let days = days.unwrap_or(1);
-    // let today = todays_date();
-
-    // let start = today
-    //     .checked_sub_days(Days::new(days))
-    //     .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "data underflow"))?;
-
-    // let end = today;
-
-    // let opts = RenderOpts {
-    //     verbose: cli.verbose,
-    //     vault_name: None,
-    //     dry_run: false,
-    //     ..Default::default()
-    // };
-
-    // render_review_title(&start, &end, days, &opts)?;
-
-    // // We need to compute the data we need first.
-
-    // for d in start.iter_days().take_while(|d| *d < end) {
-    //     let path = resolve_day_file_path(
-    //         &d,
-    //         cli.data_dir.as_deref(),
-    //         cli.verbose,
-    //         cli.vault.as_deref(),
-    //     )?;
-
-    //     if let Ok(df) = load_dayfile_if_exists(&path) {
-    //         if df.items.is_empty() {
-    //             continue;
-    //         }
-
-    //         render_review_dayfile(&df, &opts)?;
-    //     }
-    // }
-
-    // Ok(())
-}
-
 fn run_migrate(
     cli: &Cli,
     from_date: &Option<NaiveDate>,
@@ -412,4 +370,46 @@ fn run_migrate(
     }
 
     Ok(())
+}
+
+fn run_review(cli: &Cli, days: Option<u64>) -> io::Result<()> {
+    todo!()
+    // let days = days.unwrap_or(1);
+    // let today = todays_date();
+
+    // let start = today
+    //     .checked_sub_days(Days::new(days))
+    //     .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "data underflow"))?;
+
+    // let end = today;
+
+    // let opts = RenderOpts {
+    //     verbose: cli.verbose,
+    //     vault_name: None,
+    //     dry_run: false,
+    //     ..Default::default()
+    // };
+
+    // render_review_title(&start, &end, days, &opts)?;
+
+    // // We need to compute the data we need first.
+
+    // for d in start.iter_days().take_while(|d| *d < end) {
+    //     let path = resolve_day_file_path(
+    //         &d,
+    //         cli.data_dir.as_deref(),
+    //         cli.verbose,
+    //         cli.vault.as_deref(),
+    //     )?;
+
+    //     if let Ok(df) = load_dayfile_if_exists(&path) {
+    //         if df.items.is_empty() {
+    //             continue;
+    //         }
+
+    //         render_review_dayfile(&df, &opts)?;
+    //     }
+    // }
+
+    // Ok(())
 }
