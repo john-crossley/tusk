@@ -156,19 +156,30 @@ impl Renderer for TerminalRenderer {
             .checked_sub_days(Days::new(1))
             .expect("end should always be at least one day after start");
 
-        let title = format!(
-            "Review: {} → {}",
-            start.format(DATE_FORMAT),
-            display_end.format(DATE_FORMAT)
+        // Build title
+        let start_s = start.format(DATE_FORMAT).to_string();
+        let end_s = display_end.format(DATE_FORMAT).to_string();
+
+        let raw_title = format!("Review: {start_s} → {end_s}");
+
+        let styled_title = format!(
+            "{} {} {} {}",
+            self.theme.title("Review:"),
+            self.theme.info(&start_s),
+            self.theme.dim("→"),
+            self.theme.info(&end_s),
         );
 
-        Self::title_underline(&self.theme, &title, &mut out)?;
+        Self::title_underline_styled(&self.theme, &raw_title, &styled_title, &mut out)?;
+
+        // end build
 
         writeln!(
             &mut out,
-            "Last {} {} (excluding today)\n",
+            "Last {} {} {}\n",
             self.theme.info(&days.to_string()),
             if days == 1 { "day" } else { "days" },
+            self.theme.dim("(excluding today)"),
         )?;
 
         let open_count: usize = dayfiles
@@ -183,16 +194,33 @@ impl Renderer for TerminalRenderer {
 
         let total = open_count + complete_count;
 
+        writeln!(&mut out, "Summary")?;
         writeln!(
             &mut out,
-            "Summary\n  Total: {}\n  Open: {}\n  Completed: {}\n  Active days: {}\n",
-            self.theme.ok(&total.to_string()),
-            self.theme.ok(&open_count.to_string()),
-            self.theme.ok(&complete_count.to_string()),
-            self.theme.ok(&dayfiles.len().to_string()),
+            "  {} {}",
+            self.theme.dim("Total:"),
+            self.theme.info(&total.to_string())
         )?;
+        writeln!(
+            &mut out,
+            "  {} {}",
+            self.theme.dim("Open:"),
+            self.theme.warn(&open_count.to_string())
+        )?;
+        writeln!(
+            &mut out,
+            "  {} {}",
+            self.theme.dim("Completed:"),
+            self.theme.ok(&complete_count.to_string())
+        )?;
+        writeln!(
+            &mut out,
+            "  {} {}",
+            self.theme.dim("Active days:"),
+            self.theme.info(&dayfiles.len().to_string())
+        )?;
+        writeln!(&mut out)?;
 
-        // Tue 16 Sep 2025  •  12 tasks (11 open, 1 done)
         for df in dayfiles {
             let total_item_count: usize = df.items.len();
             let total_open_item_count: usize =
@@ -209,17 +237,27 @@ impl Renderer for TerminalRenderer {
             Self::title_underline(&self.theme, &title, &mut out)?;
 
             for (index, item) in df.items.iter().enumerate() {
-                //  1. ☑ Finish up pull request ▽
+                let is_done = item.done_at.is_some();
+                let next_index = (index + 1).to_string();
+
+                let idx = if is_done {
+                    self.theme.dim(&next_index)
+                } else {
+                    self.theme.plain(&next_index)
+                };
+
+                let text = if is_done {
+                    self.theme.dim(&item.text)
+                } else {
+                    self.theme.plain(&item.text)
+                };
+
                 writeln!(
                     &mut out,
                     "{}. {} {} {}",
-                    index + 1,
-                    self.theme.checkbox(item.done_at.is_some()),
-                    if item.done_at.is_some() {
-                        self.theme.dim(&item.text).to_string()
-                    } else {
-                        item.text.to_string()
-                    },
+                    idx,
+                    self.theme.checkbox(is_done),
+                    text,
                     self.theme.priority(&item.priority)
                 )?;
             }
@@ -350,6 +388,20 @@ impl TerminalRenderer {
         let underline = "_".repeat(title.chars().count());
         writeln!(out, "{underline}")?;
 
+        Ok(())
+    }
+
+    fn title_underline_styled(
+        theme: &Theme,
+        raw_title: &str,
+        styled_title: &str,
+        out: &mut impl Write,
+    ) -> io::Result<()> {
+        writeln!(out)?;
+        writeln!(out, "{styled_title}")?;
+
+        let underline_len = raw_title.chars().count();
+        writeln!(out, "{}", "─".repeat(underline_len))?;
         Ok(())
     }
 

@@ -15,11 +15,15 @@ impl Theme {
     }
 
     pub fn title(&self, s: &str) -> ColoredString {
-        if self.color { s.bold() } else { s.normal() }
+        if self.color { s.bold().white() } else { s.normal() }
     }
 
     pub fn dim(&self, s: &str) -> ColoredString {
         if self.color { s.dimmed() } else { s.normal() }
+    }
+
+    pub fn plain(&self, s: &str) -> ColoredString {
+        s.normal()
     }
 
     pub fn ok(&self, s: &str) -> ColoredString {
@@ -78,5 +82,13 @@ impl Theme {
             ItemPriority::Medium => g.yellow().bold(),
             ItemPriority::Low => g.dimmed(),
         }
+    }
+
+    pub fn label(&self, s: &str) -> ColoredString {
+        if self.color { s.dimmed() } else { s.normal() }
+    }
+
+    pub fn faint(&self, s: &str) -> ColoredString {
+        self.dim(s)
     }
 }
