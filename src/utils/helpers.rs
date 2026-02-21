@@ -1,8 +1,15 @@
-use std::{io::{self, Error}, path::PathBuf};
+use std::{
+    io::{self, Error},
+    path::PathBuf,
+};
 
 use chrono::NaiveDate;
 
-use crate::{models::item::ItemPriority, utils::{dates::todays_date, files::resolve_day_file_path}, Cli};
+use crate::{
+    Cli,
+    models::item::ItemPriority,
+    utils::{dates::todays_date, files::resolve_day_file_path},
+};
 
 pub fn validate_index(i: usize, len: usize) -> io::Result<usize> {
     if i == 0 || i > len {
@@ -52,4 +59,26 @@ pub fn extract_tags(s: &str) -> Vec<String> {
     s.split_whitespace()
         .filter_map(|w| w.strip_prefix('#').map(|t| t.to_string()))
         .collect()
+}
+
+pub fn warn_dayfile_error(
+    date: chrono::NaiveDate,
+    path: &std::path::Path,
+    err: &std::io::Error,
+    verbose: bool,
+) {
+    use std::io::ErrorKind;
+
+    if err.kind() == ErrorKind::NotFound {
+        return;
+    }
+
+    if verbose {
+        eprintln!(
+            "warn: {} — failed to load dayfile\n      path: {}\n      error: {}",
+            date,
+            path.display(),
+            err
+        );
+    }
 }

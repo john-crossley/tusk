@@ -1,3 +1,5 @@
+use chrono::NaiveDate;
+
 use crate::{
     display::renderer::Renderer,
     models::{dayfile::DayFile, item::Item},
@@ -20,6 +22,16 @@ impl Renderer for MarkdownRenderer {
         _from_df: &DayFile,
         _items: &[Item],
         _dry_run: bool,
+    ) -> Result<(), std::io::Error> {
+        todo!()
+    }
+
+    fn render_review(
+        &self,
+        start: &NaiveDate,
+        end: &NaiveDate,
+        days: u64,
+        dayfiles: &[DayFile],
     ) -> Result<(), std::io::Error> {
         todo!()
     }

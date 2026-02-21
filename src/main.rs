@@ -3,7 +3,7 @@ use std::{
     path::PathBuf,
 };
 
-use chrono::{NaiveDate, Utc};
+use chrono::{Days, NaiveDate, Utc};
 use clap::{Parser, Subcommand};
 
 mod display;
@@ -11,24 +11,25 @@ mod models;
 mod utils;
 
 use crate::{
-    models::item::Item,
+    models::{dayfile::DayFile, item::Item},
     utils::{
         dates::{parse_ymd, todays_date},
         editor::edit_in_editor,
-        files::{load_or_create_dayfile, resolve_day_file_path, save_dayfile},
+        files::{
+            load_dayfile_if_exists, load_or_create_dayfile, resolve_day_file_path, save_dayfile,
+        },
         helpers::{
-            current_day_context, extract_tags, get_item_priority, sanitise_str, validate_index,
+            current_day_context, extract_tags, get_item_priority, sanitise_str, validate_index, warn_dayfile_error,
         },
         render::{RenderOpts, RenderOutput, make_renderer},
     },
 };
 
-
 ///
 /// Tasks to complete
 /// 1. Remove the date variable from the global args scope.
 /// 2. Can the from, to dates accept "today", "tomorrow", "yesterday"?
-/// 
+///
 
 #[derive(Parser, Debug)]
 #[command(
@@ -373,43 +374,38 @@ fn run_migrate(
 }
 
 fn run_review(cli: &Cli, days: Option<u64>) -> io::Result<()> {
-    todo!()
-    // let days = days.unwrap_or(1);
-    // let today = todays_date();
+    let days = days.unwrap_or(1);
+    let today = todays_date();
 
-    // let start = today
-    //     .checked_sub_days(Days::new(days))
-    //     .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "data underflow"))?;
+    let start = today
+        .checked_sub_days(Days::new(days))
+        .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "data underflow"))?;
 
-    // let end = today;
+    let end = today;
+    let opts: RenderOpts = cli.into();
 
-    // let opts = RenderOpts {
-    //     verbose: cli.verbose,
-    //     vault_name: None,
-    //     dry_run: false,
-    //     ..Default::default()
-    // };
+    let mut dayfiles: Vec<DayFile> = Vec::new();
 
-    // render_review_title(&start, &end, days, &opts)?;
+    for d in start.iter_days().take_while(|d| *d < end) {
+        let path = resolve_day_file_path(
+            &d,
+            cli.data_dir.as_deref(),
+            opts.verbose,
+            opts.vault_name.as_deref(),
+        )?;
 
-    // // We need to compute the data we need first.
+        match load_dayfile_if_exists(&path) {
+            Ok(df) => {
+                if !df.items.is_empty() {
+                    dayfiles.push(df);
+                }
+            }
+            Err(e) => warn_dayfile_error(d, &path, &e, cli.verbose),
+        }
+    }
 
-    // for d in start.iter_days().take_while(|d| *d < end) {
-    //     let path = resolve_day_file_path(
-    //         &d,
-    //         cli.data_dir.as_deref(),
-    //         cli.verbose,
-    //         cli.vault.as_deref(),
-    //     )?;
+    let renderer = make_renderer(&opts);
+    renderer.render_review(&start, &end, days, &dayfiles)?;
 
-    //     if let Ok(df) = load_dayfile_if_exists(&path) {
-    //         if df.items.is_empty() {
-    //             continue;
-    //         }
-
-    //         render_review_dayfile(&df, &opts)?;
-    //     }
-    // }
-
-    // Ok(())
+    Ok(())
 }

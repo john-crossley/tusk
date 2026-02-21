@@ -1,12 +1,18 @@
-use chrono::NaiveDate;
+use chrono::{Days, NaiveDate};
 use colored::Colorize;
-use std::io::{self, Error, Write};
+use std::{
+    io::{self, Error, Write},
+    usize,
+};
 
 use crate::{
     display::renderer::Renderer,
     models::{dayfile::DayFile, item::Item},
     utils::theme::Theme,
 };
+
+static DATE_FORMAT: &'static str = "%a %d %b %Y";
+static DATE_WITH_TIME_FORMAT: &'static str = "%Y-%m-%d %H:%M";
 
 pub struct TerminalRenderer {
     pub theme: Theme,
@@ -77,12 +83,12 @@ impl Renderer for TerminalRenderer {
             out,
             "    {} {}",
             self.theme.dim("Created:"),
-            item.created_at.format("%Y-%m-%d %H:%M")
+            item.created_at.format(DATE_WITH_TIME_FORMAT)
         )?;
 
         // Done
         let done_s = match &item.done_at {
-            Some(ts) => ts.format("%Y-%m-%d %H:%M").to_string(),
+            Some(ts) => ts.format(DATE_WITH_TIME_FORMAT).to_string(),
             None => "not yet".into(),
         };
 
@@ -93,7 +99,7 @@ impl Renderer for TerminalRenderer {
                 out,
                 "    {} {}",
                 self.theme.dim("Migrated from:"),
-                migrated_from.format("%Y-%m-%d").to_string()
+                migrated_from.format(DATE_FORMAT).to_string()
             )?;
         }
 
@@ -133,6 +139,91 @@ impl Renderer for TerminalRenderer {
 
         self.render_list(&mut out, items)?;
         self.render_migratation_count(&mut out, items, from_df.date, dry_run)?;
+
+        Ok(())
+    }
+
+    fn render_review(
+        &self,
+        start: &NaiveDate,
+        end: &NaiveDate,
+        days: u64,
+        dayfiles: &[DayFile],
+    ) -> Result<(), std::io::Error> {
+        let mut out = io::stdout().lock();
+
+        let display_end = end
+            .checked_sub_days(Days::new(1))
+            .expect("end should always be at least one day after start");
+
+        let title = format!(
+            "Review: {} → {}",
+            start.format(DATE_FORMAT),
+            display_end.format(DATE_FORMAT)
+        );
+
+        Self::title_underline(&self.theme, &title, &mut out)?;
+
+        writeln!(
+            &mut out,
+            "Last {} {} (excluding today)\n",
+            self.theme.info(&days.to_string()),
+            if days == 1 { "day" } else { "days" },
+        )?;
+
+        let open_count: usize = dayfiles
+            .iter()
+            .map(|d| d.items.iter().filter(|i| i.done_at.is_none()).count())
+            .sum();
+
+        let complete_count: usize = dayfiles
+            .iter()
+            .map(|d| d.items.iter().filter(|i| i.done_at.is_some()).count())
+            .sum();
+
+        let total = open_count + complete_count;
+
+        writeln!(
+            &mut out,
+            "Summary\n  Total: {}\n  Open: {}\n  Completed: {}\n  Active days: {}\n",
+            self.theme.ok(&total.to_string()),
+            self.theme.ok(&open_count.to_string()),
+            self.theme.ok(&complete_count.to_string()),
+            self.theme.ok(&dayfiles.len().to_string()),
+        )?;
+
+        // Tue 16 Sep 2025  •  12 tasks (11 open, 1 done)
+        for df in dayfiles {
+            let total_item_count: usize = df.items.len();
+            let total_open_item_count: usize =
+                df.items.iter().filter(|i| i.done_at.is_none()).count();
+
+            let title = format!(
+                "{} • {} task(s) ({} open, {} done)",
+                df.date.format(DATE_FORMAT),
+                total_item_count,
+                total_open_item_count,
+                total_item_count - total_open_item_count
+            );
+
+            Self::title_underline(&self.theme, &title, &mut out)?;
+
+            for (index, item) in df.items.iter().enumerate() {
+                //  1. ☑ Finish up pull request ▽
+                writeln!(
+                    &mut out,
+                    "{}. {} {} {}",
+                    index + 1,
+                    self.theme.checkbox(item.done_at.is_some()),
+                    if item.done_at.is_some() {
+                        self.theme.dim(&item.text).to_string()
+                    } else {
+                        item.text.to_string()
+                    },
+                    self.theme.priority(&item.priority)
+                )?;
+            }
+        }
 
         Ok(())
     }
@@ -254,20 +345,12 @@ impl TerminalRenderer {
     // Utils
 
     fn title_underline(theme: &Theme, title: &str, out: &mut impl Write) -> Result<(), Error> {
-        let underline = Self::repeat_char('-', title.len());
-
         writeln!(out)?;
-        writeln!(out, "{}", theme.title(&title))?;
-        writeln!(out, "{}", underline)?;
-        Ok(())
-    }
+        writeln!(out, "{}", theme.title(title))?;
+        let underline = "_".repeat(title.chars().count());
+        writeln!(out, "{underline}")?;
 
-    fn repeat_char(c: char, n: usize) -> String {
-        let mut s = String::with_capacity(n);
-        for _ in 0..n {
-            s.push(c);
-        }
-        s
+        Ok(())
     }
 
     fn abbrev_id(id: &str, len: usize) -> String {

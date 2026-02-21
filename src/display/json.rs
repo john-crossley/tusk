@@ -1,5 +1,6 @@
 use std::io::{self, Write};
 
+use chrono::NaiveDate;
 use serde::Serialize;
 
 use crate::{
@@ -29,6 +30,16 @@ impl Renderer for JsonRenderer {
     ) -> Result<(), std::io::Error> {
         Self::to_json(to_df)?;
         Ok(())
+    }
+
+    fn render_review(
+        &self,
+        start: &NaiveDate,
+        end: &NaiveDate,
+        days: u64,
+        dayfiles: &[DayFile],
+    ) -> Result<(), std::io::Error> {
+        todo!()
     }
 }
 

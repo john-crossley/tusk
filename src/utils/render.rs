@@ -1,3 +1,4 @@
+use chrono::NaiveDate;
 use clap::ValueEnum;
 use std::io::{self};
 
@@ -70,6 +71,20 @@ impl RendererImpl {
             RendererImpl::Terminal(r) => r.render_summary(index, item),
             RendererImpl::Json(r) => r.render_summary(index, item),
             RendererImpl::Markdown(r) => r.render_summary(index, item),
+        }
+    }
+
+    pub fn render_review(
+        &self,
+        start: &NaiveDate,
+        end: &NaiveDate,
+        days: u64,
+        dayfiles: &[DayFile],
+    ) -> io::Result<()> {
+        match self {
+            RendererImpl::Terminal(r) => r.render_review(start, end, days, dayfiles),
+            RendererImpl::Json(r) => r.render_review(start, end, days, dayfiles),
+            RendererImpl::Markdown(r) => r.render_review(start, end, days, dayfiles),
         }
     }
 
