@@ -10,6 +10,13 @@ pub enum ItemPriority {
     Low,
 }
 
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ItemStatus {
+    Open,
+    Done,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Item {
     pub id: String,
@@ -40,6 +47,14 @@ impl Item {
             due: None,
             notes,
             migrated_from: None,
+        }
+    }
+
+    pub fn status(&self) -> ItemStatus {
+        if self.done_at.is_some() {
+            ItemStatus::Done
+        } else {
+            ItemStatus::Open
         }
     }
 }
