@@ -2,6 +2,7 @@ use std::io::{self, Write};
 
 use chrono::NaiveDate;
 use serde::Serialize;
+use serde_json::json;
 
 use crate::{
     display::renderer::Renderer,
@@ -12,24 +13,31 @@ pub struct JsonRenderer;
 
 impl Renderer for JsonRenderer {
     fn render_day(&self, df: &DayFile) -> Result<(), std::io::Error> {
-        Self::to_json(df)?;
-        Ok(())
+        Self::to_json(df)
     }
 
     fn render_summary(&self, _index: Option<usize>, item: &Item) -> Result<(), std::io::Error> {
-        Self::to_json(item)?;
-        Ok(())
+        Self::to_json(item)
     }
 
     fn render_migrate(
         &self,
         to_df: &DayFile,
-        _from_df: &DayFile,
-        _items: &[Item],
-        _dry_run: bool,
+        from_df: &DayFile,
+        items: &[Item],
+        dry_run: bool,
     ) -> Result<(), std::io::Error> {
-        Self::to_json(to_df)?;
-        Ok(())
+        todo!()
+        // let output = json!({
+        //     "from_dayfile": from_df,
+        //     "to_dayfile": to_df,
+        //     "items_migrated": {
+        //         "dry_run": dry_run,
+        //         "items": items
+        //     }
+        // });
+
+        // Self::to_json(&output)
     }
 
     fn render_review(

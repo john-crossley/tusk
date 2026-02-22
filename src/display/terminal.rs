@@ -11,8 +11,8 @@ use crate::{
     utils::theme::Theme,
 };
 
-static DATE_FORMAT: &'static str = "%a %d %b %Y";
-static DATE_WITH_TIME_FORMAT: &'static str = "%Y-%m-%d %H:%M";
+const DATE_FORMAT: &str = "%a %d %b %Y";
+const DATE_WITH_TIME_FORMAT: &str = "%Y-%m-%d %H:%M";
 
 pub struct TerminalRenderer {
     pub theme: Theme,
