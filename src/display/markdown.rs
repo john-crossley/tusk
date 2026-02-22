@@ -12,7 +12,7 @@ impl Renderer for MarkdownRenderer {
         todo!()
     }
 
-    fn render_summary(&self, _index: Option<usize>, _item: &Item) -> Result<(), std::io::Error> {
+    fn render_summary(&self, date: NaiveDate, index: usize, item: &Item) -> Result<(), std::io::Error> {
         todo!()
     }
 

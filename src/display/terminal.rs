@@ -46,9 +46,13 @@ impl Renderer for TerminalRenderer {
         Ok(())
     }
 
-    fn render_summary(&self, index: Option<usize>, item: &Item) -> Result<(), Error> {
+    fn render_summary(
+        &self,
+        _date: NaiveDate,
+        index: usize,
+        item: &Item,
+    ) -> Result<(), std::io::Error> {
         let mut out = io::stdout().lock();
-        let index = index.map(|i| i.to_string()).unwrap_or(item.id.to_string());
 
         // Header
         writeln!(
@@ -131,7 +135,7 @@ impl Renderer for TerminalRenderer {
                 out,
                 "🦣 {}",
                 self.theme
-                    .dim(&format!("No tasks to migrate from {} 🐘", from_df.date))
+                    .dim("No tasks to migrate.")
             )?;
 
             return Ok(());

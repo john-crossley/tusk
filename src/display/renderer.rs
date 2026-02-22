@@ -7,7 +7,12 @@ use crate::models::{dayfile::DayFile, item::Item};
 pub trait Renderer {
     fn render_day(&self, df: &DayFile) -> Result<(), Error>;
 
-    fn render_summary(&self, index: Option<usize>, item: &Item) -> Result<(), Error>;
+    fn render_summary(
+        &self,
+        date: NaiveDate,
+        index: usize,
+        item: &Item,
+    ) -> Result<(), Error>;
 
     fn render_migrate(
         &self,

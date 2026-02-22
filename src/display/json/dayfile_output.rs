@@ -7,9 +7,9 @@ const SCHEMA_VERSION: u8 = 1;
 
 #[derive(Serialize, Debug)]
 pub struct DayOutput {
-    date: NaiveDate,
+    pub date: NaiveDate,
     #[serde(skip_serializing_if = "Option::is_none")]
-    path: Option<String>,
+    pub path: Option<String>,
 }
 
 #[derive(Serialize, Debug)]

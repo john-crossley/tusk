@@ -30,6 +30,7 @@ use crate::{
 /// Tasks to complete
 /// 1. Remove the date variable from the global args scope.
 /// 2. Can the from, to dates accept "today", "tomorrow", "yesterday"?
+/// 3. Show notes when `t show <INDEX>`
 ///
 
 #[derive(Parser, Debug)]
@@ -211,7 +212,7 @@ fn run_add(
         let opts: RenderOpts = cli.into();
         let renderer = make_renderer(&opts);
 
-        renderer.render_summary(None, item)?;
+        renderer.render_summary(df.date, df.items.len(), item)?;
     }
 
     Ok(())
@@ -301,13 +302,13 @@ fn run_edit(
 
 fn run_show(cli: &Cli, idx: usize) -> io::Result<()> {
     let (date, path) = current_day_context(cli)?;
-    let mut dayfile = load_or_create_dayfile(&path, date)?;
-    let pos = validate_index(idx, dayfile.items.len())?;
+    let mut df = load_or_create_dayfile(&path, date)?;
+    let pos = validate_index(idx, df.items.len())?;
 
-    if let Some(item) = dayfile.items.get_mut(pos) {
+    if let Some(item) = df.items.get_mut(pos) {
         let opts: RenderOpts = cli.into();
         let renderer = make_renderer(&opts);
-        renderer.render_summary(Some(idx), item)?;
+        renderer.render_summary(df.date, idx, item)?;
     }
 
     Ok(())

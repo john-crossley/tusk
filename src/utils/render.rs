@@ -66,11 +66,11 @@ impl RendererImpl {
         }
     }
 
-    pub fn render_summary(&self, index: Option<usize>, item: &Item) -> io::Result<()> {
+    pub fn render_summary(&self, date: NaiveDate, index: usize, item: &Item) -> io::Result<()> {
         match self {
-            RendererImpl::Terminal(r) => r.render_summary(index, item),
-            RendererImpl::Json(r) => r.render_summary(index, item),
-            RendererImpl::Markdown(r) => r.render_summary(index, item),
+            RendererImpl::Terminal(r) => r.render_summary(date, index, item),
+            RendererImpl::Json(r) => r.render_summary(date, index, item),
+            RendererImpl::Markdown(r) => r.render_summary(date, index, item),
         }
     }
 

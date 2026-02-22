@@ -5,26 +5,29 @@ use serde::Serialize;
 
 use crate::{
     display::{
-        json::dayfile_output::{DayFileOutput, Response},
+        json::{dayfile_output::{DayFileOutput, Response}, show_output::ShowOutput},
         renderer::Renderer,
     },
     models::{dayfile::DayFile, item::Item},
 };
 
 mod dayfile_output;
-mod summary_output;
+mod show_output;
+mod migrate_output;
 
 pub struct JsonRenderer;
 
 impl Renderer for JsonRenderer {
     fn render_day(&self, df: &DayFile) -> Result<(), std::io::Error> {
-        let output = &DayFileOutput::from(df);
-        let response = Response::<&DayFileOutput>::new("ls", output);
+        let payload = DayFileOutput::from(df);
+        let response = Response::<&DayFileOutput>::new("ls", &payload);
         Self::to_json(&response)
     }
 
-    fn render_summary(&self, _index: Option<usize>, item: &Item) -> Result<(), std::io::Error> {
-        Self::to_json(item)
+    fn render_summary(&self, date: NaiveDate, index: usize, item: &Item) -> Result<(), std::io::Error> {
+        let payload = ShowOutput::new(index, date, item);
+        let response = Response::<&ShowOutput>::new("show", &payload);
+        Self::to_json(&response)
     }
 
     fn render_migrate(
