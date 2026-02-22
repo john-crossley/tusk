@@ -19,7 +19,8 @@ use crate::{
             load_dayfile_if_exists, load_or_create_dayfile, resolve_day_file_path, save_dayfile,
         },
         helpers::{
-            current_day_context, extract_tags, get_item_priority, sanitise_str, validate_index, warn_dayfile_error,
+            current_day_context, extract_tags, get_item_priority, sanitise_str, validate_index,
+            warn_dayfile_error,
         },
         render::{RenderOpts, RenderOutput, make_renderer},
     },
