@@ -6,17 +6,23 @@ use serde::Serialize;
 use crate::{
     display::{
         json::{
-            dayfile_output::{DayFileOutput, Response}, migrate_output::MigrateOutput, review_output::ReviewOutput, show_output::ShowOutput
+            action_output::ActionOutput,
+            dayfile_output::{DayFileOutput, DayOutput, Response},
+            migrate_output::MigrateOutput,
+            review_output::ReviewOutput,
+            show_output::{Reference, ReferenceKind, ShowOutput},
         },
         renderer::Renderer,
     },
-    models::{dayfile::DayFile, item::Item}, utils::helpers::item_count_meta,
+    models::{dayfile::DayFile, item::Item},
+    utils::{helpers::item_count_meta, render::ActionKind},
 };
 
+mod action_output;
 mod dayfile_output;
 mod migrate_output;
-mod show_output;
 mod review_output;
+mod show_output;
 
 pub struct JsonRenderer;
 
@@ -60,6 +66,27 @@ impl Renderer for JsonRenderer {
         let count = item_count_meta(dayfiles);
         let payload = ReviewOutput::new(days, start, end, true, dayfiles, count);
         let response = Response::new("review", &payload);
+        Self::to_json(&response)
+    }
+
+    fn render_action(
+        &self,
+        index: usize,
+        date: NaiveDate,
+        action: ActionKind,
+        item: Option<&Item>,
+    ) -> Result<(), std::io::Error> {
+        let payload = ActionOutput::new(
+            DayOutput { date, path: None },
+            Reference {
+                kind: ReferenceKind::Index,
+                value: index,
+            },
+            action.as_result(),
+            item.map(Into::into),
+        );
+
+        let response = Response::new(action.as_command(), payload);
         Self::to_json(&response)
     }
 }

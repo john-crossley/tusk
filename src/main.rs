@@ -22,7 +22,7 @@ use crate::{
             current_day_context, extract_tags, get_item_priority, sanitise_str, validate_index,
             warn_dayfile_error,
         },
-        render::{RenderOpts, RenderOutput, make_renderer},
+        render::{ActionKind, RenderOpts, RenderOutput, make_renderer},
     },
 };
 
@@ -242,15 +242,28 @@ fn run_done(cli: &Cli, idx: usize, mark_done: bool) -> io::Result<()> {
     let mut dayfile = load_or_create_dayfile(&path, date)?;
 
     let pos = validate_index(idx, dayfile.items.len())?;
-    let item = &mut dayfile.items[pos];
-    item.done_at = if mark_done {
-        item.done_at.take().or(Some(Utc::now()))
-    } else {
-        None
-    };
+
+    {
+        let item = &mut dayfile.items[pos];
+        item.done_at = if mark_done {
+            item.done_at.take().or(Some(Utc::now()))
+        } else {
+            None
+        };
+    }
+
+    let item = &dayfile.items[pos];
     save_dayfile(&path, &dayfile)?;
 
-    Ok(())
+    let renderer = make_renderer(&cli.into());
+
+    let action = if mark_done {
+        ActionKind::Done
+    } else {
+        ActionKind::Undone
+    };
+
+    renderer.render_action(idx, date, action, Some(&item))
 }
 
 fn run_rm(cli: &Cli, idx: usize) -> io::Result<()> {
@@ -258,10 +271,11 @@ fn run_rm(cli: &Cli, idx: usize) -> io::Result<()> {
     let mut dayfile = load_or_create_dayfile(&path, date)?;
 
     let pos = validate_index(idx, dayfile.items.len())?;
-    let _ = &mut dayfile.items.remove(pos);
+    let item = &mut dayfile.items.remove(pos);
     save_dayfile(&path, &dayfile)?;
 
-    Ok(())
+    let renderer = make_renderer(&cli.into());
+    renderer.render_action(idx, date, ActionKind::Removed, Some(&item))
 }
 
 fn run_edit(
@@ -360,7 +374,6 @@ fn run_migrate(
         }
 
         renderer.render_migrate(to_df.date, &from_df_before, &pending_items, true)?;
-
     } else {
         let (mut to_move, to_keep): (Vec<Item>, Vec<Item>) =
             from_df.items.into_iter().partition(|i| i.done_at.is_none());

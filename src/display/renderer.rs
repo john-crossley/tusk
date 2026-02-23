@@ -2,17 +2,15 @@ use std::io::Error;
 
 use chrono::NaiveDate;
 
-use crate::models::{dayfile::DayFile, item::Item};
+use crate::{
+    models::{dayfile::DayFile, item::Item},
+    utils::render::ActionKind,
+};
 
 pub trait Renderer {
     fn render_day(&self, df: &DayFile) -> Result<(), Error>;
 
-    fn render_summary(
-        &self,
-        date: NaiveDate,
-        index: usize,
-        item: &Item,
-    ) -> Result<(), Error>;
+    fn render_summary(&self, date: NaiveDate, index: usize, item: &Item) -> Result<(), Error>;
 
     fn render_migrate(
         &self,
@@ -28,5 +26,13 @@ pub trait Renderer {
         end: NaiveDate,
         days: u64,
         dayfiles: &[DayFile],
+    ) -> Result<(), Error>;
+
+    fn render_action(
+        &self,
+        index: usize,
+        date: NaiveDate,
+        action: ActionKind,
+        item: Option<&Item>,
     ) -> Result<(), Error>;
 }

@@ -2,7 +2,7 @@ use chrono::NaiveDate;
 
 use crate::{
     display::renderer::Renderer,
-    models::{dayfile::DayFile, item::Item},
+    models::{dayfile::DayFile, item::Item}, utils::render::ActionKind,
 };
 
 pub struct MarkdownRenderer;
@@ -39,5 +39,15 @@ impl Renderer for MarkdownRenderer {
         _dayfiles: &[DayFile],
     ) -> Result<(), std::io::Error> {
         todo!()
+    }
+
+    fn render_action(
+        &self,
+        _index: usize,
+        _date: NaiveDate,
+        _action: ActionKind,
+        _item: Option<&Item>,
+    ) -> Result<(), std::io::Error> {
+        Ok(())
     }
 }

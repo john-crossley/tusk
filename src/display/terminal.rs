@@ -8,7 +8,7 @@ use std::{
 use crate::{
     display::renderer::Renderer,
     models::{dayfile::DayFile, item::Item},
-    utils::{helpers::item_count_meta, theme::Theme},
+    utils::{helpers::item_count_meta, render::ActionKind, theme::Theme},
 };
 
 const DATE_FORMAT: &str = "%a %d %b %Y";
@@ -257,6 +257,16 @@ impl Renderer for TerminalRenderer {
             }
         }
 
+        Ok(())
+    }
+
+    fn render_action(
+        &self,
+        _index: usize,
+        _date: NaiveDate,
+        _action: ActionKind,
+        _item: Option<&Item>,
+    ) -> Result<(), std::io::Error> {
         Ok(())
     }
 }

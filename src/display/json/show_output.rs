@@ -8,8 +8,8 @@ use crate::{
 
 #[derive(Debug, Serialize)]
 pub struct Reference {
-    kind: ReferenceKind,
-    value: usize,
+    pub kind: ReferenceKind,
+    pub value: usize,
 }
 
 #[derive(Debug, Serialize)]

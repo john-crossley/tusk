@@ -96,9 +96,45 @@ impl RendererImpl {
         dry_run: bool,
     ) -> io::Result<()> {
         match self {
-            RendererImpl::Terminal(r) => r.render_migrate(to_date, from_df_original, moved_items, dry_run),
-            RendererImpl::Json(r) => r.render_migrate(to_date, from_df_original, moved_items, dry_run),
-            RendererImpl::Markdown(r) => r.render_migrate(to_date, from_df_original, moved_items, dry_run),
+            RendererImpl::Terminal(r) => {
+                r.render_migrate(to_date, from_df_original, moved_items, dry_run)
+            }
+            RendererImpl::Json(r) => {
+                r.render_migrate(to_date, from_df_original, moved_items, dry_run)
+            }
+            RendererImpl::Markdown(r) => {
+                r.render_migrate(to_date, from_df_original, moved_items, dry_run)
+            }
+        }
+    }
+
+    pub fn render_action(
+        &self,
+        index: usize,
+        date: NaiveDate,
+        action: ActionKind,
+        item: Option<&Item>,
+    ) -> io::Result<()> {
+        match self {
+            RendererImpl::Terminal(r) => r.render_action(index, date, action, item),
+            RendererImpl::Json(r) => r.render_action(index, date, action, item),
+            RendererImpl::Markdown(r) => r.render_action(index, date, action, item),
+        }
+    }
+}
+
+pub enum ActionKind {
+    Done,
+    Undone,
+    Removed,
+}
+
+impl ActionKind {
+    pub fn as_command(&self) -> &'static str {
+        match self {
+            ActionKind::Done => "done",
+            ActionKind::Undone => "undone",
+            ActionKind::Removed => "rm",
         }
     }
 }
