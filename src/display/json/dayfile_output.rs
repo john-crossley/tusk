@@ -1,7 +1,10 @@
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::Serialize;
 
-use crate::models::{dayfile::DayFile, item::{Item, ItemPriority, ItemStatus}};
+use crate::models::{
+    dayfile::DayFile,
+    item::{Item, ItemPriority, ItemStatus},
+};
 
 const SCHEMA_VERSION: u8 = 1;
 
@@ -10,6 +13,18 @@ pub struct DayOutput {
     pub date: NaiveDate,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
+}
+
+#[derive(Serialize, Debug)]
+pub struct IndexItemOutput {
+    pub index: usize,
+    pub item: ItemOutput,
+}
+
+impl IndexItemOutput {
+    pub fn new(index: usize, item: ItemOutput) -> Self {
+        Self { index, item }
+    }
 }
 
 #[derive(Serialize, Debug)]
@@ -31,16 +46,16 @@ pub struct ItemOutput {
 }
 
 #[derive(Serialize, Debug)]
-pub struct StatsOutput {
-    total: usize,
-    open: usize,
-    done: usize,
+pub struct DayStatsOutput {
+    pub total: usize,
+    pub open: usize,
+    pub done: usize,
 }
 
 #[derive(Serialize, Debug)]
 pub struct DayFileOutput {
     day: DayOutput,
-    stats: StatsOutput,
+    stats: DayStatsOutput,
     items: Vec<ItemOutput>,
 }
 
@@ -72,7 +87,7 @@ impl From<&DayFile> for DayFileOutput {
                 date: value.date,
                 path: None,
             },
-            stats: StatsOutput { total, open, done },
+            stats: DayStatsOutput { total, open, done },
             items: value.items.iter().map(ItemOutput::from).collect(),
         }
     }
@@ -86,11 +101,11 @@ pub struct Response<T> {
 }
 
 impl<T> Response<T> {
-    pub fn new(command:&'static str, data: T) -> Self {
+    pub fn new(command: &'static str, data: T) -> Self {
         Self {
             schema_version: SCHEMA_VERSION,
             command,
-            data
+            data,
         }
     }
 }

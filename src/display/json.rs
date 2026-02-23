@@ -6,18 +6,17 @@ use serde::Serialize;
 use crate::{
     display::{
         json::{
-            dayfile_output::{DayFileOutput, Response},
-            migrate_output::MigrateOutput,
-            show_output::ShowOutput,
+            dayfile_output::{DayFileOutput, Response}, migrate_output::MigrateOutput, review_output::ReviewOutput, show_output::ShowOutput
         },
         renderer::Renderer,
     },
-    models::{dayfile::DayFile, item::Item},
+    models::{dayfile::DayFile, item::Item}, utils::helpers::item_count_meta,
 };
 
 mod dayfile_output;
 mod migrate_output;
 mod show_output;
+mod review_output;
 
 pub struct JsonRenderer;
 
@@ -53,12 +52,15 @@ impl Renderer for JsonRenderer {
 
     fn render_review(
         &self,
-        _start: &NaiveDate,
-        _end: &NaiveDate,
-        _days: u64,
-        _dayfiles: &[DayFile],
+        start: NaiveDate,
+        end: NaiveDate,
+        days: u64,
+        dayfiles: &[DayFile],
     ) -> Result<(), std::io::Error> {
-        todo!()
+        let count = item_count_meta(dayfiles);
+        let payload = ReviewOutput::new(days, start, end, true, dayfiles, count);
+        let response = Response::new("review", &payload);
+        Self::to_json(&response)
     }
 }
 

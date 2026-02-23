@@ -414,7 +414,7 @@ fn run_review(cli: &Cli, days: Option<u64>) -> io::Result<()> {
     }
 
     let renderer = make_renderer(&opts);
-    renderer.render_review(&start, &end, days, &dayfiles)?;
+    renderer.render_review(start, end, days, &dayfiles)?;
 
     Ok(())
 }

@@ -7,7 +7,7 @@ use chrono::NaiveDate;
 
 use crate::{
     Cli,
-    models::item::ItemPriority,
+    models::{dayfile::DayFile, item::ItemPriority},
     utils::{dates::todays_date, files::resolve_day_file_path},
 };
 
@@ -80,5 +80,31 @@ pub fn warn_dayfile_error(
             path.display(),
             err
         );
+    }
+}
+
+pub struct ItemCountResult {
+    pub open: usize,
+    pub complete: usize,
+    pub total: usize,
+}
+
+pub fn item_count_meta(dayfiles: &[DayFile]) -> ItemCountResult {
+    let open_count: usize = dayfiles
+        .iter()
+        .map(|d| d.items.iter().filter(|i| i.done_at.is_none()).count())
+        .sum();
+
+    let complete_count: usize = dayfiles
+        .iter()
+        .map(|d| d.items.iter().filter(|i| i.done_at.is_some()).count())
+        .sum();
+
+    let total = open_count + complete_count;
+
+    ItemCountResult {
+        open: open_count,
+        complete: complete_count,
+        total,
     }
 }

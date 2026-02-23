@@ -33,8 +33,8 @@ impl Renderer for MarkdownRenderer {
 
     fn render_review(
         &self,
-        _start: &NaiveDate,
-        _end: &NaiveDate,
+        _start: NaiveDate,
+        _end: NaiveDate,
         _days: u64,
         _dayfiles: &[DayFile],
     ) -> Result<(), std::io::Error> {

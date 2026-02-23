@@ -8,7 +8,7 @@ use std::{
 use crate::{
     display::renderer::Renderer,
     models::{dayfile::DayFile, item::Item},
-    utils::theme::Theme,
+    utils::{helpers::item_count_meta, theme::Theme},
 };
 
 const DATE_FORMAT: &str = "%a %d %b %Y";
@@ -149,8 +149,8 @@ impl Renderer for TerminalRenderer {
 
     fn render_review(
         &self,
-        start: &NaiveDate,
-        end: &NaiveDate,
+        start: NaiveDate,
+        end: NaiveDate,
         days: u64,
         dayfiles: &[DayFile],
     ) -> Result<(), std::io::Error> {
@@ -174,7 +174,7 @@ impl Renderer for TerminalRenderer {
             self.theme.info(&end_s),
         );
 
-        Self::title_underline_styled(&self.theme, &raw_title, &styled_title, &mut out)?;
+        Self::title_underline_styled(&raw_title, &styled_title, &mut out)?;
 
         // end build
 
@@ -186,36 +186,26 @@ impl Renderer for TerminalRenderer {
             self.theme.dim("(excluding today)"),
         )?;
 
-        let open_count: usize = dayfiles
-            .iter()
-            .map(|d| d.items.iter().filter(|i| i.done_at.is_none()).count())
-            .sum();
-
-        let complete_count: usize = dayfiles
-            .iter()
-            .map(|d| d.items.iter().filter(|i| i.done_at.is_some()).count())
-            .sum();
-
-        let total = open_count + complete_count;
+        let count = item_count_meta(dayfiles);
 
         writeln!(&mut out, "Summary")?;
         writeln!(
             &mut out,
             "  {} {}",
             self.theme.dim("Total:"),
-            self.theme.info(&total.to_string())
+            self.theme.info(&count.total.to_string())
         )?;
         writeln!(
             &mut out,
             "  {} {}",
             self.theme.dim("Open:"),
-            self.theme.warn(&open_count.to_string())
+            self.theme.warn(&count.open.to_string())
         )?;
         writeln!(
             &mut out,
             "  {} {}",
             self.theme.dim("Completed:"),
-            self.theme.ok(&complete_count.to_string())
+            self.theme.ok(&count.complete.to_string())
         )?;
         writeln!(
             &mut out,
@@ -396,7 +386,6 @@ impl TerminalRenderer {
     }
 
     fn title_underline_styled(
-        theme: &Theme,
         raw_title: &str,
         styled_title: &str,
         out: &mut impl Write,

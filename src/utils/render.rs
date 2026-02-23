@@ -76,8 +76,8 @@ impl RendererImpl {
 
     pub fn render_review(
         &self,
-        start: &NaiveDate,
-        end: &NaiveDate,
+        start: NaiveDate,
+        end: NaiveDate,
         days: u64,
         dayfiles: &[DayFile],
     ) -> io::Result<()> {
