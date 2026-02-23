@@ -25,6 +25,7 @@ use crate::{
             current_day_context, extract_tags, sanitise_str, validate_index, warn_dayfile_error,
         },
         render::{ActionKind, RenderOpts, RenderOutput, make_renderer},
+        tusk_error::TuskError,
     },
 };
 
@@ -171,14 +172,19 @@ enum Commands {
 
 fn main() {
     let cli = Cli::parse();
+    let opts = RenderOpts::from(&cli);
+    let renderer = make_renderer(&opts);
 
     if let Err(e) = dispatch(&cli) {
-        eprintln!("Tusk: {e}");
+        if let Err(render_err) = renderer.render_error(command_name(cli.command.as_ref()), &e) {
+            eprintln!("Tusk: {e}");
+            eprintln!("Failed to render error: {render_err}");
+        }
         std::process::exit(1);
     }
 }
 
-fn dispatch(cli: &Cli) -> io::Result<()> {
+fn dispatch(cli: &Cli) -> Result<(), TuskError> {
     match cli.command.as_ref() {
         Some(Commands::Add {
             date,
@@ -186,7 +192,7 @@ fn dispatch(cli: &Cli) -> io::Result<()> {
             priority,
             attach_notes,
         }) => run_add(&cli, *date, text, *priority, attach_notes),
-        Some(Commands::Ls { date, tags }) => run_ls(&cli, *date, tags),
+        Some(Commands::Ls { date, tags }) => run_ls(cli, *date, tags.as_deref().unwrap_or(&[])),
         Some(Commands::Done { date, index }) => run_done(&cli, *date, *index, true),
         Some(Commands::Undone { date, index }) => run_done(&cli, *date, *index, false),
         Some(Commands::Rm { date, index }) => run_rm(&cli, *date, *index),
@@ -204,7 +210,7 @@ fn dispatch(cli: &Cli) -> io::Result<()> {
             dry_run,
         }) => run_migrate(&cli, from_date, to_date, *dry_run),
         Some(Commands::Review { days }) => run_review(&cli, *days),
-        None => run_ls(&cli, None, &None),
+        None => run_ls(&cli, None, &[]),
     }
 }
 
@@ -216,7 +222,7 @@ fn run_add(
     text: &str,
     priority: Option<ItemPriority>,
     attach_notes: &bool,
-) -> Result<(), Error> {
+) -> Result<(), TuskError> {
     let new_text = sanitise_str(text)?;
     let tags = extract_tags(text);
 
@@ -248,11 +254,11 @@ fn run_add(
     Ok(())
 }
 
-fn run_ls(cli: &Cli, date: Option<NaiveDate>, tags: &Option<Vec<String>>) -> io::Result<()> {
+fn run_ls(cli: &Cli, date: Option<NaiveDate>, tags: &[String]) -> Result<(), TuskError> {
     let (date, path) = current_day_context(cli, date)?;
     let mut dayfile = load_or_create_dayfile(&path, date)?;
 
-    if let Some(tags) = tags {
+    if !tags.is_empty() {
         dayfile.items.retain(|i| {
             tags.iter()
                 .all(|t| i.tags.iter().any(|it| it.eq_ignore_ascii_case(t)))
@@ -267,7 +273,12 @@ fn run_ls(cli: &Cli, date: Option<NaiveDate>, tags: &Option<Vec<String>>) -> io:
     Ok(())
 }
 
-fn run_done(cli: &Cli, date: Option<NaiveDate>, idx: usize, mark_done: bool) -> io::Result<()> {
+fn run_done(
+    cli: &Cli,
+    date: Option<NaiveDate>,
+    idx: usize,
+    mark_done: bool,
+) -> Result<(), TuskError> {
     let (date, path) = current_day_context(cli, date)?;
     let mut dayfile = load_or_create_dayfile(&path, date)?;
 
@@ -292,19 +303,23 @@ fn run_done(cli: &Cli, date: Option<NaiveDate>, idx: usize, mark_done: bool) -> 
     };
 
     let renderer = make_renderer(&cli.into());
-    renderer.render_action(idx, date, action, Some(&item))
+    renderer.render_action(idx, date, action, Some(&item))?;
+
+    Ok(())
 }
 
-fn run_rm(cli: &Cli, date: Option<NaiveDate>, idx: usize) -> io::Result<()> {
+fn run_rm(cli: &Cli, date: Option<NaiveDate>, idx: usize) -> Result<(), TuskError> {
     let (date, path) = current_day_context(cli, date)?;
     let mut dayfile = load_or_create_dayfile(&path, date)?;
 
     let pos = validate_index(idx, dayfile.items.len())?;
-    let item = &mut dayfile.items.remove(pos);
+    let item = dayfile.items.remove(pos);
     save_dayfile(&path, &dayfile)?;
 
     let renderer = make_renderer(&cli.into());
-    renderer.render_action(idx, date, ActionKind::Removed, Some(&item))
+    renderer.render_action(idx, date, ActionKind::Removed, Some(&item))?;
+
+    Ok(())
 }
 
 fn run_edit(
@@ -314,7 +329,7 @@ fn run_edit(
     text: &Option<String>,
     attach_notes: &bool,
     priority: Option<ItemPriority>,
-) -> io::Result<()> {
+) -> Result<(), TuskError> {
     let (date, path) = current_day_context(cli, date)?;
     let mut dayfile = load_or_create_dayfile(&path, date)?;
 
@@ -344,7 +359,7 @@ fn run_edit(
     Ok(())
 }
 
-fn run_show(cli: &Cli, date: Option<NaiveDate>, idx: usize) -> io::Result<()> {
+fn run_show(cli: &Cli, date: Option<NaiveDate>, idx: usize) -> Result<(), TuskError> {
     let (date, path) = current_day_context(cli, date)?;
     let mut df = load_or_create_dayfile(&path, date)?;
     let pos = validate_index(idx, df.items.len())?;
@@ -363,15 +378,14 @@ fn run_migrate(
     from_date: &Option<NaiveDate>,
     to_date: &Option<NaiveDate>,
     dry_run: bool,
-) -> io::Result<()> {
+) -> Result<(), TuskError> {
     let from_date = from_date.unwrap_or_else(todays_date);
     let to_date = to_date.unwrap_or_else(todays_date);
 
     if from_date == to_date {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "Both `--from` and `--to` are the same value, check your input.",
-        ));
+        return Err(TuskError::InvalidInput {
+            message: "Both `--from` and `--to` are the same value, check your input.".to_string(),
+        });
     }
 
     let from_df_path = resolve_day_file_path(
@@ -425,7 +439,7 @@ fn run_migrate(
     Ok(())
 }
 
-fn run_review(cli: &Cli, days: Option<u64>) -> io::Result<()> {
+fn run_review(cli: &Cli, days: Option<u64>) -> Result<(), TuskError> {
     let days = days.unwrap_or(1);
     let today = todays_date();
 
@@ -460,4 +474,19 @@ fn run_review(cli: &Cli, days: Option<u64>) -> io::Result<()> {
     renderer.render_review(start, end, days, &dayfiles)?;
 
     Ok(())
+}
+
+fn command_name(cmd: Option<&Commands>) -> &'static str {
+    match cmd {
+        Some(Commands::Add { .. }) => "add",
+        Some(Commands::Ls { .. }) => "ls",
+        Some(Commands::Done { .. }) => "done",
+        Some(Commands::Undone { .. }) => "undone",
+        Some(Commands::Rm { .. }) => "rm",
+        Some(Commands::Edit { .. }) => "edit",
+        Some(Commands::Show { .. }) => "show",
+        Some(Commands::Migrate { .. }) => "migrate",
+        Some(Commands::Review { .. }) => "review",
+        None => "ls",
+    }
 }

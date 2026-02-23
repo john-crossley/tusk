@@ -7,16 +7,15 @@ use chrono::NaiveDate;
 
 use crate::{
     Cli,
-    models::{dayfile::DayFile, item::ItemPriority},
-    utils::{dates::todays_date, files::resolve_day_file_path},
+    models::dayfile::DayFile,
+    utils::{dates::todays_date, files::resolve_day_file_path, tusk_error::TuskError},
 };
 
-pub fn validate_index(i: usize, len: usize) -> io::Result<usize> {
+// TODO: Validate errors in this file.
+
+pub fn validate_index(i: usize, len: usize) -> Result<usize, TuskError> {
     if i == 0 || i > len {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            format!("item at index {} does not exist.", i),
-        ));
+        return Err(TuskError::IndexOutOfRange { index: i, max: len })
     }
 
     Ok(i - 1)
@@ -49,14 +48,6 @@ pub fn sanitise_str(text: &str) -> io::Result<String> {
         Ok(trimmed.to_owned())
     }
 }
-
-// pub fn get_item_priority(priority: Option<&str>) -> ItemPriority {
-//     match priority.map(|p| p.to_lowercase()) {
-//         Some(ref p) if p == "high" => ItemPriority::High,
-//         Some(ref p) if p == "med" || p == "medium" => ItemPriority::Medium,
-//         _ => ItemPriority::Low,
-//     }
-// }
 
 pub fn extract_tags(s: &str) -> Vec<String> {
     s.split_whitespace()

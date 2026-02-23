@@ -9,7 +9,7 @@ use crate::{
         terminal::TerminalRenderer,
     },
     models::{dayfile::DayFile, item::Item},
-    utils::theme::Theme,
+    utils::{theme::Theme, tusk_error::TuskError},
 };
 
 #[derive(Debug, Clone, PartialEq, ValueEnum, Copy)]
@@ -119,6 +119,14 @@ impl RendererImpl {
             RendererImpl::Terminal(r) => r.render_action(index, date, action, item),
             RendererImpl::Json(r) => r.render_action(index, date, action, item),
             RendererImpl::Markdown(r) => r.render_action(index, date, action, item),
+        }
+    }
+
+    pub fn render_error(&self, command: &'static str, e: &TuskError) -> io::Result<()> {
+        match self {
+            RendererImpl::Terminal(r) => r.render_error(command, e),
+            RendererImpl::Json(r) => r.render_error(command, e),
+            RendererImpl::Markdown(r) => r.render_error(command, e),
         }
     }
 }

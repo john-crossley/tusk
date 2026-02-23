@@ -8,7 +8,7 @@ use std::{
 use crate::{
     display::renderer::Renderer,
     models::{dayfile::DayFile, item::Item},
-    utils::{helpers::item_count_meta, render::ActionKind, theme::Theme},
+    utils::{helpers::item_count_meta, render::ActionKind, theme::Theme, tusk_error::TuskError},
 };
 
 const DATE_FORMAT: &str = "%a %d %b %Y";
@@ -21,7 +21,7 @@ pub struct TerminalRenderer {
 }
 
 impl Renderer for TerminalRenderer {
-    fn render_day(&self, df: &DayFile) -> Result<(), Error> {
+    fn render_day(&self, df: &DayFile) -> std::io::Result<()> {
         let mut out = io::stdout().lock();
 
         let title = self.build_title_header(df.date, None);
@@ -51,7 +51,7 @@ impl Renderer for TerminalRenderer {
         _date: NaiveDate,
         index: usize,
         item: &Item,
-    ) -> Result<(), std::io::Error> {
+    ) -> std::io::Result<()> {
         let mut out = io::stdout().lock();
 
         // Header
@@ -153,7 +153,7 @@ impl Renderer for TerminalRenderer {
         end: NaiveDate,
         days: u64,
         dayfiles: &[DayFile],
-    ) -> Result<(), std::io::Error> {
+    ) -> std::io::Result<()> {
         let mut out = io::stdout().lock();
 
         let display_end = end
@@ -266,7 +266,11 @@ impl Renderer for TerminalRenderer {
         _date: NaiveDate,
         _action: ActionKind,
         _item: Option<&Item>,
-    ) -> Result<(), std::io::Error> {
+    ) -> std::io::Result<()> {
+        Ok(())
+    }
+
+    fn render_error(&self, command: &'static str, e: &TuskError) -> std::io::Result<()> {
         Ok(())
     }
 }

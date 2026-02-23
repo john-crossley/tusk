@@ -4,3 +4,4 @@ pub mod render;
 pub mod editor;
 pub mod helpers;
 pub mod theme;
+pub mod tusk_error;

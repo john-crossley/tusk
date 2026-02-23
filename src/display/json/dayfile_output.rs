@@ -6,8 +6,6 @@ use crate::models::{
     item::{Item, ItemPriority, ItemStatus},
 };
 
-const SCHEMA_VERSION: u8 = 1;
-
 #[derive(Serialize, Debug)]
 pub struct DayOutput {
     pub date: NaiveDate,
@@ -89,23 +87,6 @@ impl From<&DayFile> for DayFileOutput {
             },
             stats: DayStatsOutput { total, open, done },
             items: value.items.iter().map(ItemOutput::from).collect(),
-        }
-    }
-}
-
-#[derive(Debug, Serialize)]
-pub struct Response<T> {
-    schema_version: u8,
-    command: &'static str,
-    data: T,
-}
-
-impl<T> Response<T> {
-    pub fn new(command: &'static str, data: T) -> Self {
-        Self {
-            schema_version: SCHEMA_VERSION,
-            command,
-            data,
         }
     }
 }

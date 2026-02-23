@@ -4,13 +4,13 @@ use chrono::NaiveDate;
 
 use crate::{
     models::{dayfile::DayFile, item::Item},
-    utils::render::ActionKind,
+    utils::{render::ActionKind, tusk_error::TuskError},
 };
 
 pub trait Renderer {
-    fn render_day(&self, df: &DayFile) -> Result<(), Error>;
+    fn render_day(&self, df: &DayFile) -> std::io::Result<()>;
 
-    fn render_summary(&self, date: NaiveDate, index: usize, item: &Item) -> Result<(), Error>;
+    fn render_summary(&self, date: NaiveDate, index: usize, item: &Item) -> std::io::Result<()>;
 
     fn render_migrate(
         &self,
@@ -26,7 +26,7 @@ pub trait Renderer {
         end: NaiveDate,
         days: u64,
         dayfiles: &[DayFile],
-    ) -> Result<(), Error>;
+    ) -> std::io::Result<()>;
 
     fn render_action(
         &self,
@@ -34,5 +34,7 @@ pub trait Renderer {
         date: NaiveDate,
         action: ActionKind,
         item: Option<&Item>,
-    ) -> Result<(), Error>;
+    ) -> std::io::Result<()>;
+
+    fn render_error(&self, command: &'static str, e: &TuskError) -> std::io::Result<()>;
 }
