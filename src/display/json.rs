@@ -5,15 +5,19 @@ use serde::Serialize;
 
 use crate::{
     display::{
-        json::{dayfile_output::{DayFileOutput, Response}, show_output::ShowOutput},
+        json::{
+            dayfile_output::{DayFileOutput, Response},
+            migrate_output::MigrateOutput,
+            show_output::ShowOutput,
+        },
         renderer::Renderer,
     },
     models::{dayfile::DayFile, item::Item},
 };
 
 mod dayfile_output;
-mod show_output;
 mod migrate_output;
+mod show_output;
 
 pub struct JsonRenderer;
 
@@ -24,38 +28,35 @@ impl Renderer for JsonRenderer {
         Self::to_json(&response)
     }
 
-    fn render_summary(&self, date: NaiveDate, index: usize, item: &Item) -> Result<(), std::io::Error> {
+    fn render_summary(
+        &self,
+        date: NaiveDate,
+        index: usize,
+        item: &Item,
+    ) -> Result<(), std::io::Error> {
         let payload = ShowOutput::new(index, date, item);
-        let response = Response::<&ShowOutput>::new("show", &payload);
+        let response = Response::new("show", &payload);
         Self::to_json(&response)
     }
 
     fn render_migrate(
         &self,
-        to_df: &DayFile,
-        from_df: &DayFile,
-        items: &[Item],
+        to_date: NaiveDate,
+        from_df_original: &DayFile,
+        moved_items: &[Item],
         dry_run: bool,
     ) -> Result<(), std::io::Error> {
-        todo!()
-        // let output = json!({
-        //     "from_dayfile": from_df,
-        //     "to_dayfile": to_df,
-        //     "items_migrated": {
-        //         "dry_run": dry_run,
-        //         "items": items
-        //     }
-        // });
-
-        // Self::to_json(&output)
+        let payload = MigrateOutput::new(dry_run, from_df_original, to_date, moved_items);
+        let response = Response::new("migrate", &payload);
+        Self::to_json(&response)
     }
 
     fn render_review(
         &self,
-        start: &NaiveDate,
-        end: &NaiveDate,
-        days: u64,
-        dayfiles: &[DayFile],
+        _start: &NaiveDate,
+        _end: &NaiveDate,
+        _days: u64,
+        _dayfiles: &[DayFile],
     ) -> Result<(), std::io::Error> {
         todo!()
     }

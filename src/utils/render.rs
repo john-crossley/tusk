@@ -90,15 +90,15 @@ impl RendererImpl {
 
     pub fn render_migrate(
         &self,
-        to_df: &DayFile,
-        from_df: &DayFile,
-        items: &[Item],
+        to_date: NaiveDate,
+        from_df_original: &DayFile,
+        moved_items: &[Item],
         dry_run: bool,
     ) -> io::Result<()> {
         match self {
-            RendererImpl::Terminal(r) => r.render_migrate(to_df, from_df, items, dry_run),
-            RendererImpl::Json(r) => r.render_migrate(to_df, from_df, items, dry_run),
-            RendererImpl::Markdown(r) => r.render_migrate(to_df, from_df, items, dry_run),
+            RendererImpl::Terminal(r) => r.render_migrate(to_date, from_df_original, moved_items, dry_run),
+            RendererImpl::Json(r) => r.render_migrate(to_date, from_df_original, moved_items, dry_run),
+            RendererImpl::Markdown(r) => r.render_migrate(to_date, from_df_original, moved_items, dry_run),
         }
     }
 }

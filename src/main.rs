@@ -345,16 +345,22 @@ fn run_migrate(
     )?;
 
     let mut from_df = load_or_create_dayfile(&from_df_path, from_date)?;
+    let from_df_before = from_df.clone();
+
     let mut to_df = load_or_create_dayfile(&to_df_path, to_date)?;
-    let pending_items = &from_df.migratable_items();
     let opts: RenderOpts = cli.into();
 
     let renderer = make_renderer(&opts);
 
     if dry_run {
-        let mut preview = to_df.clone();
-        preview.items.extend_from_slice(&pending_items);
-        renderer.render_migrate(&preview, &from_df, pending_items, true)?;
+        let mut pending_items = from_df.migratable_items();
+
+        for i in pending_items.iter_mut() {
+            i.migrated_from = Some(from_date);
+        }
+
+        renderer.render_migrate(to_df.date, &from_df_before, &pending_items, true)?;
+
     } else {
         let (mut to_move, to_keep): (Vec<Item>, Vec<Item>) =
             from_df.items.into_iter().partition(|i| i.done_at.is_none());
@@ -364,12 +370,13 @@ fn run_migrate(
         }
 
         from_df.items = to_keep;
+        let moved_items = to_move.clone();
         to_df.items.extend(to_move);
 
         save_dayfile(&from_df_path, &from_df)?;
         save_dayfile(&to_df_path, &to_df)?;
 
-        renderer.render_migrate(&to_df, &from_df, pending_items, false)?;
+        renderer.render_migrate(to_df.date, &from_df_before, &moved_items, false)?;
     }
 
     Ok(())

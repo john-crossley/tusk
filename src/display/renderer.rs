@@ -16,9 +16,9 @@ pub trait Renderer {
 
     fn render_migrate(
         &self,
-        to_df: &DayFile,
-        from_df: &DayFile,
-        items: &[Item],
+        to_date: NaiveDate,
+        from_df_original: &DayFile,
+        moved_items: &[Item],
         dry_run: bool,
     ) -> Result<(), Error>;
 
