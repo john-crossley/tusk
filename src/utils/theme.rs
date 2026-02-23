@@ -50,14 +50,6 @@ impl Theme {
         }
     }
 
-    pub fn info_em(&self, s: &str) -> ColoredString {
-        if !self.color {
-            return s.normal();
-        }
-
-        s.blue().dimmed().bold().italic()
-    }
-
     pub fn checkbox(&self, done: bool) -> &'static str {
         if self.color && io::stdout().is_terminal() {
             if done { "☑" } else { "☐" }
@@ -82,13 +74,5 @@ impl Theme {
             ItemPriority::Medium => g.yellow().bold(),
             ItemPriority::Low => g.dimmed(),
         }
-    }
-
-    pub fn label(&self, s: &str) -> ColoredString {
-        if self.color { s.dimmed() } else { s.normal() }
-    }
-
-    pub fn faint(&self, s: &str) -> ColoredString {
-        self.dim(s)
     }
 }

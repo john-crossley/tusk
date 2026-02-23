@@ -35,6 +35,6 @@ impl ShowOutput {
 #[derive(Debug, Clone, Copy, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ReferenceKind {
-    Id,
+    _Id,
     Index,
 }
