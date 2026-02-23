@@ -11,7 +11,10 @@ mod models;
 mod utils;
 
 use crate::{
-    models::{dayfile::DayFile, item::Item},
+    models::{
+        dayfile::DayFile,
+        item::{Item, ItemPriority},
+    },
     utils::{
         dates::{parse_ymd, todays_date},
         editor::edit_in_editor,
@@ -19,19 +22,11 @@ use crate::{
             load_dayfile_if_exists, load_or_create_dayfile, resolve_day_file_path, save_dayfile,
         },
         helpers::{
-            current_day_context, extract_tags, get_item_priority, sanitise_str, validate_index,
-            warn_dayfile_error,
+            current_day_context, extract_tags, sanitise_str, validate_index, warn_dayfile_error,
         },
         render::{ActionKind, RenderOpts, RenderOutput, make_renderer},
     },
 };
-
-///
-/// Tasks to complete
-/// 1. Remove the date variable from the global args scope.
-/// 2. Can the from, to dates accept "today", "tomorrow", "yesterday"?
-/// 3. Show notes when `t show <INDEX>`
-///
 
 #[derive(Parser, Debug)]
 #[command(
@@ -42,10 +37,6 @@ use crate::{
     subcommand = "ls"
 )]
 struct Cli {
-    /// Target date (YYYY-MM-DD). Defaults to today if omitted.
-    #[arg(short, long, value_parser = parse_ymd, value_name = "YYYY-MM-DD", global = true)]
-    date: Option<NaiveDate>,
-
     /// Override the base data directory (default: platform-specific app data dir).
     #[arg(long, value_name = "DIR")]
     data_dir: Option<PathBuf>,
@@ -73,6 +64,10 @@ struct Cli {
 enum Commands {
     #[command(name = "ls", about = "List items for the target date")]
     Ls {
+        /// Target date (YYYY-MM-DD). Defaults to today if omitted.
+        #[arg(short, long, value_parser = parse_ymd, value_name = "YYYY-MM-DD")]
+        date: Option<NaiveDate>,
+
         /// Filter tasks by one or more tags
         #[arg(long = "tag", num_args = 1..)]
         tags: Option<Vec<String>>,
@@ -80,12 +75,16 @@ enum Commands {
 
     #[command(name = "add", about = "Add a new item to your day")]
     Add {
+        /// Target date (YYYY-MM-DD). Defaults to today if omitted.
+        #[arg(short, long, value_parser = parse_ymd, value_name = "YYYY-MM-DD")]
+        date: Option<NaiveDate>,
+
         /// The description of the item being added.
         text: String,
 
         /// The priority of the item being added.
         #[arg(short = 'p', long = "priority")]
-        priority: Option<String>,
+        priority: Option<ItemPriority>,
 
         /// Add a note to this item, opens in an external editor
         #[arg(short = 'n', long = "notes")]
@@ -93,16 +92,38 @@ enum Commands {
     },
 
     #[command(name = "done", about = "Mark an item done by its index")]
-    Done { index: usize },
+    Done {
+        /// Target date (YYYY-MM-DD). Defaults to today if omitted.
+        #[arg(short, long, value_parser = parse_ymd, value_name = "YYYY-MM-DD")]
+        date: Option<NaiveDate>,
+
+        index: usize,
+    },
 
     #[command(name = "undone", about = "Mark an item undone by its index")]
-    Undone { index: usize },
+    Undone {
+        /// Target date (YYYY-MM-DD). Defaults to today if omitted.
+        #[arg(short, long, value_parser = parse_ymd, value_name = "YYYY-MM-DD")]
+        date: Option<NaiveDate>,
+
+        index: usize,
+    },
 
     #[command(name = "rm", about = "Remove an item from your list.")]
-    Rm { index: usize },
+    Rm {
+        /// Target date (YYYY-MM-DD). Defaults to today if omitted.
+        #[arg(short, long, value_parser = parse_ymd, value_name = "YYYY-MM-DD")]
+        date: Option<NaiveDate>,
+
+        index: usize,
+    },
 
     #[command(name = "edit", about = "Edit an item from your list.")]
     Edit {
+        /// Target date (YYYY-MM-DD). Defaults to today if omitted.
+        #[arg(short, long, value_parser = parse_ymd, value_name = "YYYY-MM-DD")]
+        date: Option<NaiveDate>,
+
         index: usize,
         text: Option<String>,
         /// Add a note to this item, opens in an external editor
@@ -110,11 +131,17 @@ enum Commands {
         attach_notes: bool,
         /// The priority of the item being edited.
         #[arg(short = 'p', long = "priority")]
-        priority: Option<String>,
+        priority: Option<ItemPriority>,
     },
 
     #[command(name = "show", about = "Show an item by its index.")]
-    Show { index: usize },
+    Show {
+        /// Target date (YYYY-MM-DD). Defaults to today if omitted.
+        #[arg(short, long, value_parser = parse_ymd, value_name = "YYYY-MM-DD")]
+        date: Option<NaiveDate>,
+
+        index: usize,
+    },
 
     #[command(
         name = "migrate",
@@ -154,28 +181,30 @@ fn main() {
 fn dispatch(cli: &Cli) -> io::Result<()> {
     match cli.command.as_ref() {
         Some(Commands::Add {
+            date,
             text,
             priority,
             attach_notes,
-        }) => run_add(&cli, text, priority.as_deref(), attach_notes),
-        Some(Commands::Ls { tags }) => run_ls(&cli, tags),
-        Some(Commands::Done { index }) => run_done(&cli, *index, true),
-        Some(Commands::Undone { index }) => run_done(&cli, *index, false),
-        Some(Commands::Rm { index }) => run_rm(&cli, *index),
+        }) => run_add(&cli, *date, text, *priority, attach_notes),
+        Some(Commands::Ls { date, tags }) => run_ls(&cli, *date, tags),
+        Some(Commands::Done { date, index }) => run_done(&cli, *date, *index, true),
+        Some(Commands::Undone { date, index }) => run_done(&cli, *date, *index, false),
+        Some(Commands::Rm { date, index }) => run_rm(&cli, *date, *index),
         Some(Commands::Edit {
+            date,
             index,
             text,
             attach_notes,
             priority,
-        }) => run_edit(&cli, *index, text, attach_notes, priority.as_deref()),
-        Some(Commands::Show { index }) => run_show(&cli, *index),
+        }) => run_edit(&cli, *date, *index, text, attach_notes, *priority),
+        Some(Commands::Show { date, index }) => run_show(&cli, *date, *index),
         Some(Commands::Migrate {
             from_date,
             to_date,
             dry_run,
         }) => run_migrate(&cli, from_date, to_date, *dry_run),
         Some(Commands::Review { days }) => run_review(&cli, *days),
-        None => run_ls(&cli, &None),
+        None => run_ls(&cli, None, &None),
     }
 }
 
@@ -183,14 +212,15 @@ fn dispatch(cli: &Cli) -> io::Result<()> {
 
 fn run_add(
     cli: &Cli,
+    date: Option<NaiveDate>,
     text: &str,
-    priority: Option<&str>,
+    priority: Option<ItemPriority>,
     attach_notes: &bool,
 ) -> Result<(), Error> {
     let new_text = sanitise_str(text)?;
     let tags = extract_tags(text);
 
-    let (date, path) = current_day_context(cli)?;
+    let (date, path) = current_day_context(cli, date)?;
     let mut df = load_or_create_dayfile(&path, date)?;
 
     let notes = if *attach_notes {
@@ -201,7 +231,7 @@ fn run_add(
 
     df.items.push(Item::new(
         new_text,
-        get_item_priority(priority),
+        priority.unwrap_or(ItemPriority::Low),
         tags,
         notes,
     ));
@@ -218,8 +248,8 @@ fn run_add(
     Ok(())
 }
 
-fn run_ls(cli: &Cli, tags: &Option<Vec<String>>) -> io::Result<()> {
-    let (date, path) = current_day_context(cli)?;
+fn run_ls(cli: &Cli, date: Option<NaiveDate>, tags: &Option<Vec<String>>) -> io::Result<()> {
+    let (date, path) = current_day_context(cli, date)?;
     let mut dayfile = load_or_create_dayfile(&path, date)?;
 
     if let Some(tags) = tags {
@@ -237,8 +267,8 @@ fn run_ls(cli: &Cli, tags: &Option<Vec<String>>) -> io::Result<()> {
     Ok(())
 }
 
-fn run_done(cli: &Cli, idx: usize, mark_done: bool) -> io::Result<()> {
-    let (date, path) = current_day_context(cli)?;
+fn run_done(cli: &Cli, date: Option<NaiveDate>, idx: usize, mark_done: bool) -> io::Result<()> {
+    let (date, path) = current_day_context(cli, date)?;
     let mut dayfile = load_or_create_dayfile(&path, date)?;
 
     let pos = validate_index(idx, dayfile.items.len())?;
@@ -255,19 +285,18 @@ fn run_done(cli: &Cli, idx: usize, mark_done: bool) -> io::Result<()> {
     let item = &dayfile.items[pos];
     save_dayfile(&path, &dayfile)?;
 
-    let renderer = make_renderer(&cli.into());
-
     let action = if mark_done {
         ActionKind::Done
     } else {
         ActionKind::Undone
     };
 
+    let renderer = make_renderer(&cli.into());
     renderer.render_action(idx, date, action, Some(&item))
 }
 
-fn run_rm(cli: &Cli, idx: usize) -> io::Result<()> {
-    let (date, path) = current_day_context(cli)?;
+fn run_rm(cli: &Cli, date: Option<NaiveDate>, idx: usize) -> io::Result<()> {
+    let (date, path) = current_day_context(cli, date)?;
     let mut dayfile = load_or_create_dayfile(&path, date)?;
 
     let pos = validate_index(idx, dayfile.items.len())?;
@@ -280,12 +309,13 @@ fn run_rm(cli: &Cli, idx: usize) -> io::Result<()> {
 
 fn run_edit(
     cli: &Cli,
+    date: Option<NaiveDate>,
     idx: usize,
     text: &Option<String>,
     attach_notes: &bool,
-    priority: Option<&str>,
+    priority: Option<ItemPriority>,
 ) -> io::Result<()> {
-    let (date, path) = current_day_context(cli)?;
+    let (date, path) = current_day_context(cli, date)?;
     let mut dayfile = load_or_create_dayfile(&path, date)?;
 
     let pos = validate_index(idx, dayfile.items.len())?;
@@ -304,8 +334,8 @@ fn run_edit(
 
         item.notes = notes;
 
-        if priority.is_some() {
-            item.priority = get_item_priority(priority);
+        if let Some(p) = priority {
+            item.priority = p;
         }
 
         save_dayfile(&path, &dayfile)?;
@@ -314,8 +344,8 @@ fn run_edit(
     Ok(())
 }
 
-fn run_show(cli: &Cli, idx: usize) -> io::Result<()> {
-    let (date, path) = current_day_context(cli)?;
+fn run_show(cli: &Cli, date: Option<NaiveDate>, idx: usize) -> io::Result<()> {
+    let (date, path) = current_day_context(cli, date)?;
     let mut df = load_or_create_dayfile(&path, date)?;
     let pos = validate_index(idx, df.items.len())?;
 

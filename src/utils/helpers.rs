@@ -22,8 +22,11 @@ pub fn validate_index(i: usize, len: usize) -> io::Result<usize> {
     Ok(i - 1)
 }
 
-pub fn current_day_context(cli: &Cli) -> Result<(NaiveDate, PathBuf), Error> {
-    let date = cli.date.unwrap_or_else(todays_date);
+pub fn current_day_context(
+    cli: &Cli,
+    date: Option<NaiveDate>,
+) -> Result<(NaiveDate, PathBuf), Error> {
+    let date = date.unwrap_or_else(todays_date);
 
     let path = resolve_day_file_path(
         &date,
@@ -47,13 +50,13 @@ pub fn sanitise_str(text: &str) -> io::Result<String> {
     }
 }
 
-pub fn get_item_priority(priority: Option<&str>) -> ItemPriority {
-    match priority.map(|p| p.to_lowercase()) {
-        Some(ref p) if p == "high" => ItemPriority::High,
-        Some(ref p) if p == "med" || p == "medium" => ItemPriority::Medium,
-        _ => ItemPriority::Low,
-    }
-}
+// pub fn get_item_priority(priority: Option<&str>) -> ItemPriority {
+//     match priority.map(|p| p.to_lowercase()) {
+//         Some(ref p) if p == "high" => ItemPriority::High,
+//         Some(ref p) if p == "med" || p == "medium" => ItemPriority::Medium,
+//         _ => ItemPriority::Low,
+//     }
+// }
 
 pub fn extract_tags(s: &str) -> Vec<String> {
     s.split_whitespace()

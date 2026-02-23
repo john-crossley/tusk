@@ -1,8 +1,9 @@
 use chrono::{DateTime, NaiveDate, Utc};
 use nanoid::nanoid;
 use serde::{Deserialize, Serialize};
+use clap::ValueEnum;
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
 #[serde(rename_all = "lowercase")]
 pub enum ItemPriority {
     High,
