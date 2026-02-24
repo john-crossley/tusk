@@ -31,7 +31,9 @@ impl Theme {
         s.normal()
     }
 
-    pub fn ok(&self, s: &str) -> ColoredString {
+    pub fn ok(&self, s: impl std::fmt::Display) -> ColoredString {
+        let s = s.to_string();
+
         if self.color {
             s.green().bold()
         } else {
@@ -39,7 +41,9 @@ impl Theme {
         }
     }
 
-    pub fn warn(&self, s: &str) -> ColoredString {
+    pub fn warn(&self, s: impl std::fmt::Display) -> ColoredString {
+        let s = s.to_string();
+
         if self.color {
             s.yellow().bold()
         } else {
@@ -65,7 +69,9 @@ impl Theme {
         }
     }
 
-    pub fn info(&self, s: &str) -> ColoredString {
+    pub fn info(&self, s: impl std::fmt::Display) -> ColoredString {
+        let s = s.to_string();
+    
         if self.color {
             s.blue().dimmed().bold()
         } else {

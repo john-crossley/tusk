@@ -5,7 +5,7 @@ use chrono::NaiveDate;
 use crate::{
     display::renderer::Renderer,
     models::{dayfile::DayFile, item::Item},
-    utils::{render::ActionKind, tusk_error::TuskError},
+    utils::{helpers::stats, render::ActionKind, tusk_error::TuskError},
 };
 
 pub struct MarkdownRenderer;
@@ -29,6 +29,7 @@ impl Renderer for MarkdownRenderer {
         }
 
         self.render_list(&mut out, &df.items)?;
+        self.render_footer(&mut out, df)?;
 
         Ok(())
     }
@@ -87,9 +88,7 @@ impl MarkdownRenderer {
     }
 
     fn render_list(&self, out: &mut impl Write, items: &[Item]) -> std::io::Result<()> {
-        let width = items.len().to_string().len();
-
-        for (index, item) in items.iter().enumerate() {
+        for item in items {
             let is_done = item.done_at.is_some();
             let checkbox = if is_done { "- [x]" } else { "- [ ]" };
 
@@ -98,6 +97,18 @@ impl MarkdownRenderer {
 
             writeln!(out)?;
         }
+
+        Ok(())
+    }
+
+    fn render_footer(&self, out: &mut impl Write, dayfile: &DayFile) -> std::io::Result<()> {
+        let stats = stats(dayfile);
+
+        writeln!(
+            out,
+            "\n{} task(s) ({} open, {} done)",
+            stats.total, stats.open, stats.completed
+        )?;
 
         Ok(())
     }

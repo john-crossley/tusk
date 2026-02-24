@@ -96,3 +96,21 @@ pub fn item_count_meta(dayfiles: &[DayFile]) -> ItemCountResult {
         total,
     }
 }
+
+pub struct DayFileStats {
+    pub completed: usize,
+    pub total: usize,
+    pub open: usize,
+}
+
+pub fn stats(df: &DayFile) -> DayFileStats {
+    let completed = df.items.iter().filter(|i| i.done_at.is_some()).count();
+    let total = df.items.len();
+    let open = total - completed;
+
+    DayFileStats {
+        completed,
+        total,
+        open,
+    }
+}

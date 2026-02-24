@@ -8,7 +8,7 @@ use std::{
 use crate::{
     display::renderer::Renderer,
     models::{dayfile::DayFile, item::Item},
-    utils::{helpers::item_count_meta, render::ActionKind, theme::Theme, tusk_error::TuskError},
+    utils::{helpers::{item_count_meta, stats}, render::ActionKind, theme::Theme, tusk_error::TuskError},
 };
 
 const DATE_FORMAT: &str = "%a %d %b %Y";
@@ -343,16 +343,14 @@ impl TerminalRenderer {
     }
 
     fn render_footer(&self, out: &mut impl Write, dayfile: &DayFile) -> Result<(), Error> {
-        let completed = dayfile.items.iter().filter(|i| i.done_at.is_some()).count();
-        let total = dayfile.items.len();
-        let open = total - completed;
+        let stats = stats(dayfile);
 
         writeln!(
             out,
             "\n{} task(s) ({} open, {} done)",
-            &self.theme.info(&total.to_string()),
-            &self.theme.warn(&open.to_string()),
-            &self.theme.ok(&completed.to_string())
+            &self.theme.info(stats.total),
+            &self.theme.warn(stats.open),
+            &self.theme.ok(stats.completed)
         )?;
 
         Ok(())
