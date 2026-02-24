@@ -1,7 +1,9 @@
+use core::fmt;
+
 use chrono::{DateTime, NaiveDate, Utc};
+use clap::ValueEnum;
 use nanoid::nanoid;
 use serde::{Deserialize, Serialize};
-use clap::ValueEnum;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
 #[serde(rename_all = "lowercase")]
@@ -9,6 +11,17 @@ pub enum ItemPriority {
     High,
     Medium,
     Low,
+}
+
+impl fmt::Display for ItemPriority {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self {
+            ItemPriority::High => "high",
+            ItemPriority::Medium => "medium",
+            ItemPriority::Low => "low",
+        };
+        f.write_str(s)
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]

@@ -122,7 +122,7 @@ impl Renderer for TerminalRenderer {
     ) -> Result<(), Error> {
         let mut out = io::stdout().lock();
 
-        let title = self.build_title_header(to_date, Some(from_df_original));
+        let title = self.build_title_header(to_date, Some(from_df_original.date));
         Self::title_underline(&self.theme, &title, &mut out)?;
 
         if moved_items.is_empty() {
@@ -280,18 +280,18 @@ impl Renderer for TerminalRenderer {
 }
 
 impl TerminalRenderer {
-    fn build_title_header(&self, to_date: NaiveDate, migration: Option<&DayFile>) -> String {
+    fn build_title_header(&self, to_date: NaiveDate, migration_date: Option<NaiveDate>) -> String {
         let date_str = to_date.format("%a %d %b %Y").to_string();
 
-        let mut title = if let Some(from_df) = migration {
-            let from_date_str = from_df.date.format("%a %d %b %Y").to_string();
+        let mut title = if let Some(date) = migration_date {
+            let from_date_str = date.format("%a %d %b %Y").to_string();
             format!(
                 "Migration from {} → {}",
                 self.theme.info(&from_date_str),
                 self.theme.info(&date_str)
             )
         } else {
-            format!("Tasks for: {}", date_str)
+            format!("Tasks for {}", date_str)
         };
 
         if let Some(v) = &self.vault {
