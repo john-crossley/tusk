@@ -37,15 +37,13 @@ impl ActionOutput {
 #[serde(rename_all = "lowercase")]
 pub enum ActionResult {
     Updated,
-    Noop,
     Removed,
-    NotFound,
 }
 
 impl ActionKind {
     pub fn as_result(&self) -> ActionResult {
         match self {
-            ActionKind::Done | ActionKind::Undone => ActionResult::Updated, // or Noop based on logic outside
+            ActionKind::Done | ActionKind::Undone => ActionResult::Updated,
             ActionKind::Removed => ActionResult::Removed,
         }
     }

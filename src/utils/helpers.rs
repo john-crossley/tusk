@@ -1,7 +1,4 @@
-use std::{
-    io::{self, Error},
-    path::PathBuf,
-};
+use std::{io::Error, path::PathBuf};
 
 use chrono::NaiveDate;
 
@@ -13,7 +10,7 @@ use crate::{
 
 pub fn validate_index(i: usize, len: usize) -> Result<usize, TuskError> {
     if i == 0 || i > len {
-        return Err(TuskError::IndexOutOfRange { index: i, max: len })
+        return Err(TuskError::IndexOutOfRange { index: i, max: len });
     }
 
     Ok(i - 1)
@@ -38,7 +35,9 @@ pub fn current_day_context(
 pub fn sanitise_str(text: &str) -> Result<String, TuskError> {
     let trimmed = text.trim();
     if trimmed.is_empty() {
-        Err(TuskError::InvalidInput { message: "Oops, did you forget to add some text?".to_string() })
+        Err(TuskError::InvalidInput {
+            message: "Oops, did you forget to add some text?".to_string(),
+        })
     } else {
         Ok(trimmed.to_owned())
     }

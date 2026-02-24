@@ -1,5 +1,5 @@
 use std::{
-    io::{self, Error},
+    io::{self},
     path::PathBuf,
 };
 
