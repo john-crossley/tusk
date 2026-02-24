@@ -15,10 +15,15 @@ impl Theme {
     }
 
     pub fn title(&self, s: &str) -> ColoredString {
-        if self.color { s.bold().white() } else { s.normal() }
+        if self.color {
+            s.bold().white()
+        } else {
+            s.normal()
+        }
     }
 
-    pub fn dim(&self, s: &str) -> ColoredString {
+    pub fn dim(&self, s: impl std::fmt::Display) -> ColoredString {
+        let s = s.to_string();
         if self.color { s.dimmed() } else { s.normal() }
     }
 
@@ -37,6 +42,24 @@ impl Theme {
     pub fn warn(&self, s: &str) -> ColoredString {
         if self.color {
             s.yellow().bold()
+        } else {
+            s.normal()
+        }
+    }
+
+    pub fn error(&self, s: impl std::fmt::Display) -> ColoredString {
+        let s = s.to_string();
+
+        if self.color {
+            s.red().bold()
+        } else {
+            s.normal()
+        }
+    }
+
+    pub fn hint(&self, s: &str) -> ColoredString {
+        if self.color {
+            s.green().italic()
         } else {
             s.normal()
         }

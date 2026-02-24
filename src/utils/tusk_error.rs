@@ -15,7 +15,15 @@ impl TuskError {
         match self {
             TuskError::IndexOutOfRange { .. } => "index_out_of_range",
             TuskError::InvalidInput { .. } => "invalid_input",
-            TuskError::Io(_) => "io_error"
+            TuskError::Io(_) => "io_error",
+        }
+    }
+
+    pub fn hint(&self) -> Option<&'static str> {
+        match self {
+            TuskError::IndexOutOfRange { .. } => Some("Run 'tusk ls' to see valid item indices."),
+            TuskError::InvalidInput { .. } => None,
+            TuskError::Io(_) => None,
         }
     }
 }

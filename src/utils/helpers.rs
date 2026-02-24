@@ -11,8 +11,6 @@ use crate::{
     utils::{dates::todays_date, files::resolve_day_file_path, tusk_error::TuskError},
 };
 
-// TODO: Validate errors in this file.
-
 pub fn validate_index(i: usize, len: usize) -> Result<usize, TuskError> {
     if i == 0 || i > len {
         return Err(TuskError::IndexOutOfRange { index: i, max: len })
@@ -37,13 +35,10 @@ pub fn current_day_context(
     Ok((date, path))
 }
 
-pub fn sanitise_str(text: &str) -> io::Result<String> {
+pub fn sanitise_str(text: &str) -> Result<String, TuskError> {
     let trimmed = text.trim();
     if trimmed.is_empty() {
-        Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "Oops, did you forget to add some text?",
-        ))
+        Err(TuskError::InvalidInput { message: "Oops, did you forget to add some text?".to_string() })
     } else {
         Ok(trimmed.to_owned())
     }

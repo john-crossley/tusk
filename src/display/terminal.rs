@@ -46,12 +46,7 @@ impl Renderer for TerminalRenderer {
         Ok(())
     }
 
-    fn render_summary(
-        &self,
-        _date: NaiveDate,
-        index: usize,
-        item: &Item,
-    ) -> std::io::Result<()> {
+    fn render_summary(&self, _date: NaiveDate, index: usize, item: &Item) -> std::io::Result<()> {
         let mut out = io::stdout().lock();
 
         // Header
@@ -131,12 +126,7 @@ impl Renderer for TerminalRenderer {
         Self::title_underline(&self.theme, &title, &mut out)?;
 
         if moved_items.is_empty() {
-            writeln!(
-                out,
-                "🦣 {}",
-                self.theme
-                    .dim("No tasks to migrate.")
-            )?;
+            writeln!(out, "🦣 {}", self.theme.dim("No tasks to migrate."))?;
 
             return Ok(());
         }
@@ -271,6 +261,20 @@ impl Renderer for TerminalRenderer {
     }
 
     fn render_error(&self, command: &'static str, e: &TuskError) -> std::io::Result<()> {
+        let mut err = io::stderr().lock();
+
+        writeln!(
+            err,
+            "{} {} {}",
+            self.theme.error("error:"),
+            e,
+            self.theme.dim(format!("(command: {command})"))
+        )?;
+
+        if let Some(hint) = e.hint() {
+            writeln!(err, "{} {}", self.theme.hint("hint:"), hint)?;
+        }
+
         Ok(())
     }
 }
