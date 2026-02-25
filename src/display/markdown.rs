@@ -1,11 +1,11 @@
 use std::io::{self, Write};
 
-use chrono::NaiveDate;
+use chrono::{Days, NaiveDate};
 
 use crate::{
-    display::renderer::Renderer,
+    display::{renderer::Renderer, terminal::DATE_FORMAT},
     models::{dayfile::DayFile, item::Item},
-    utils::{helpers::stats, render::ActionKind, tusk_error::TuskError},
+    utils::{helpers::{item_count_meta, stats}, render::ActionKind, tusk_error::TuskError},
 };
 
 pub struct MarkdownRenderer;
@@ -40,22 +40,112 @@ impl Renderer for MarkdownRenderer {
 
     fn render_migrate(
         &self,
-        _to_date: NaiveDate,
-        _from_df_original: &DayFile,
-        _moved_items: &[Item],
-        _dry_run: bool,
+        to_date: NaiveDate,
+        from_df_original: &DayFile,
+        moved_items: &[Item],
+        dry_run: bool,
     ) -> std::io::Result<()> {
-        todo!()
+        let mut out = io::stdout().lock();
+        let title = self.build_title(to_date, Some(from_df_original.date));
+        writeln!(out, "{}", title)?;
+
+        if moved_items.is_empty() {
+            writeln!(out, "> 🦣 No tasks to migrate.")?;
+
+            return Ok(());
+        }
+
+        self.render_list(&mut out, moved_items)?;
+        self.render_migration_count(&mut out, moved_items, from_df_original.date, dry_run)?;
+
+        Ok(())
     }
 
     fn render_review(
         &self,
-        _start: NaiveDate,
-        _end: NaiveDate,
-        _days: u64,
-        _dayfiles: &[DayFile],
+        start: NaiveDate,
+        end: NaiveDate,
+        days: u64,
+        dayfiles: &[DayFile],
     ) -> std::io::Result<()> {
-        todo!()
+        let mut out = io::stdout().lock();
+
+        let display_end = end
+            .checked_sub_days(Days::new(1))
+            .expect("end should always be at least one day after start");
+
+        let start_s = start.format(DATE_FORMAT).to_string();
+        let end_s = display_end.format(DATE_FORMAT).to_string();
+
+        writeln!(out, "# Review: {} → {}", start_s, end_s)?;
+
+        writeln!(
+            &mut out,
+            "Last {} {} {}\n",
+            days,
+            if days == 1 { "day" } else { "days" },
+            "(excluding today)",
+        )?;
+
+        let count = item_count_meta(dayfiles);
+
+        writeln!(&mut out, "## Summary")?;
+        writeln!(
+            &mut out,
+            "  {} {}",
+            "- Total:",
+            count.total
+        )?;
+        writeln!(
+            &mut out,
+            "  {} {}",
+            "- Open:",
+            count.open
+        )?;
+        writeln!(
+            &mut out,
+            "  {} {}",
+            "- Completed:",
+            count.complete
+        )?;
+        writeln!(
+            &mut out,
+            "  {} {}",
+            "- Active days:",
+            dayfiles.len()
+        )?;
+        writeln!(&mut out)?;
+
+        for df in dayfiles {
+            let total_item_count: usize = df.items.len();
+            let total_open_item_count: usize =
+                df.items.iter().filter(|i| i.done_at.is_none()).count();
+
+            let title = format!(
+                "### {} • {} task(s) ({} open, {} done)",
+                df.date.format(DATE_FORMAT),
+                total_item_count,
+                total_open_item_count,
+                total_item_count - total_open_item_count
+            );
+
+            writeln!(out, "{}", title)?;
+
+            for (index, item) in df.items.iter().enumerate() {
+                let is_done = item.done_at.is_some();
+                let next_index = (index + 1).to_string();
+                writeln!(
+                    &mut out,
+                    "{}. {} {} {}",
+                    next_index,
+                    is_done,
+                    item.text,
+                    item.priority
+                )?;
+            }
+        }
+
+        Ok(())
     }
 
     fn render_action(
@@ -65,11 +155,25 @@ impl Renderer for MarkdownRenderer {
         _action: ActionKind,
         _item: Option<&Item>,
     ) -> std::io::Result<()> {
-        todo!()
+        Ok(())
     }
 
-    fn render_error(&self, _command: &'static str, _e: &TuskError) -> std::io::Result<()> {
-        todo!()
+    fn render_error(&self, command: &'static str, e: &TuskError) -> std::io::Result<()> {
+        let mut err = io::stderr().lock();
+
+        writeln!(
+            err,
+            "{} {} {}",
+            "error:",
+            e,
+            format!("(command: {command})")
+        )?;
+
+        if let Some(hint) = e.hint() {
+            writeln!(err, "hint: {}", hint)?;
+        }
+
+        Ok(())
     }
 }
 
@@ -109,6 +213,33 @@ impl MarkdownRenderer {
             "\n{} task(s) ({} open, {} done)",
             stats.total, stats.open, stats.completed
         )?;
+
+        Ok(())
+    }
+
+    fn render_migration_count(
+        &self,
+        out: &mut impl Write,
+        items: &[Item],
+        date: NaiveDate,
+        dry_run: bool,
+    ) -> std::io::Result<()> {
+        let count = items.len();
+
+        if count == 0 {
+            return Ok(());
+        }
+
+        let item_word = if count == 1 { "item" } else { "items" };
+        let details = if dry_run {
+            "will be migrated from:"
+        } else {
+            "migrated:"
+        };
+
+        let date_s = date.format("%a %d %b %Y").to_string();
+
+        writeln!(out, "  ↪ {} {} {} {}", count, item_word, details, date_s,)?;
 
         Ok(())
     }

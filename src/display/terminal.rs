@@ -11,8 +11,8 @@ use crate::{
     utils::{helpers::{item_count_meta, stats}, render::ActionKind, theme::Theme, tusk_error::TuskError},
 };
 
-const DATE_FORMAT: &str = "%a %d %b %Y";
-const DATE_WITH_TIME_FORMAT: &str = "%Y-%m-%d %H:%M";
+pub const DATE_FORMAT: &str = "%a %d %b %Y";
+pub const DATE_WITH_TIME_FORMAT: &str = "%Y-%m-%d %H:%M";
 
 pub struct TerminalRenderer {
     pub theme: Theme,
@@ -362,7 +362,7 @@ impl TerminalRenderer {
         items: &[Item],
         date: NaiveDate,
         dry_run: bool,
-    ) -> Result<(), Error> {
+    ) -> std::io::Result<()> {
         let count = items.len();
 
         if count == 0 {
