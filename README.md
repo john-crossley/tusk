@@ -35,9 +35,8 @@ t [OPTIONS] <COMMAND>
 
 ### Global options
 
-* `-d --date <YYYY-MM-DD>`: Target date, defaults to today's date.
 * `--data-dir <DIR>`: Override the base data directory.
-* `-j`, `--json`: Outputs results as JSON instead of text.
+* `-o`, `--output`: Outputs options `"md"|"json"|"terminal"`, defaults to `"terminal"`.
 * `--no-colour`: Disable coloured output.
 * `--verbose`: Enable verbose logging.
 
@@ -54,6 +53,7 @@ t ls --tag work shopping
 
 #### Options
 
+* `-d`, `--date <YYYY-MM-DD>`: The from date, can use `yesterday`, `today`, `tomorrow`. Defaults to current date.
 * `--tag <TAG>`: Filter tasks by one or more tags.
 
 ### add
@@ -67,6 +67,7 @@ t add "Eat more fruit and nuts" -p high -n
 
 #### Options
 
+* `-d`, `--date <YYYY-MM-DD>`: The from date, can use `yesterday`, `today`, `tomorrow`. Defaults to current date.
 * `-p, --priority <LEVEL>`: Set priority (low, med, or high), defaults to low.
 * `-n`, `--notes`: Attach notes (opens in your editor).
 
@@ -106,6 +107,7 @@ t edit 4 -p high|med|low
 
 #### Options
 
+* `-d`, `--date <YYYY-MM-DD>`: The from date, can use `yesterday`, `today`, `tomorrow`. Defaults to current date.
 * `-n`, `--notes`: Attach or edit notes.
 
 ### show
@@ -116,6 +118,10 @@ Show details of a single task.
 t show 5
 ```
 Displays the task, priority, tags, notes, and metadata in a nice formatted view.
+
+#### Options
+
+* `-d`, `--date <YYYY-MM-DD>`: The from date, can use `yesterday`, `today`, `tomorrow`. Defaults to current date.
 
 ### Migrate
 
@@ -131,6 +137,18 @@ t migrate --from 2025-10-02 --to tomorrow
 * `-f`, `--from <YYYY-MM-DD>`: The from date, can use `yesterday`, `today`, `tomorrow`
 * `-t`, `--to <YYYY-MM-DD>`: The to date, can use `yesterday`, `today`, `tomorrow`
 * `--dry-run`: Output what will be migrated without actually performing the migration.
+
+### Review
+
+Review tasks from the last n days.
+
+```bash
+t review --days 10
+```
+
+#### Options
+
+* `--days n`: The number of days to review (excludes current day).
 
 ### Examples
 
@@ -166,11 +184,8 @@ You will soon be able to organise todos into a different **"vault"** using the `
 
 ### What's next?
 
+* Persistent tasks. For those long running tasks that span multiple days.
 * Rich metadata parsing, at the moment it's not very exciting but.. It'll better support `!priority`, `@time`, `#tags` and `>due`.
-* Exporting to Mardown
-* Better rendering options/themes
-* Weekly summary
-* Maybe sync support?
 
 ### Build from source 🦀
 
