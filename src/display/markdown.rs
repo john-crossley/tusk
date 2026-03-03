@@ -5,7 +5,11 @@ use chrono::{Days, NaiveDate};
 use crate::{
     display::{renderer::Renderer, terminal::DATE_FORMAT},
     models::{dayfile::DayFile, item::Item},
-    utils::{helpers::{item_count_meta, stats}, render::ActionKind, tusk_error::TuskError},
+    utils::{
+        helpers::{item_count_meta, stats},
+        render::ActionKind,
+        tusk_error::TuskError,
+    },
 };
 
 pub struct MarkdownRenderer;
@@ -81,7 +85,7 @@ impl Renderer for MarkdownRenderer {
 
         writeln!(
             &mut out,
-            "Last {} {} {}\n",
+            "> Last {} {} {}\n",
             days,
             if days == 1 { "day" } else { "days" },
             "(excluding today)",
@@ -90,59 +94,46 @@ impl Renderer for MarkdownRenderer {
         let count = item_count_meta(dayfiles);
 
         writeln!(&mut out, "## Summary")?;
-        writeln!(
-            &mut out,
-            "  {} {}",
-            "- Total:",
-            count.total
-        )?;
-        writeln!(
-            &mut out,
-            "  {} {}",
-            "- Open:",
-            count.open
-        )?;
-        writeln!(
-            &mut out,
-            "  {} {}",
-            "- Completed:",
-            count.complete
-        )?;
-        writeln!(
-            &mut out,
-            "  {} {}",
-            "- Active days:",
-            dayfiles.len()
-        )?;
+        writeln!(&mut out, "{} {}", "- **Total:**", count.total)?;
+        writeln!(&mut out, "{} {}", "- **Open:**", count.open)?;
+        writeln!(&mut out, "{} {}", "- **Completed:**", count.complete)?;
+        writeln!(&mut out, "{} {}", "- **Active days:**", dayfiles.len())?;
         writeln!(&mut out)?;
 
         for df in dayfiles {
             let total_item_count: usize = df.items.len();
+
             let total_open_item_count: usize =
                 df.items.iter().filter(|i| i.done_at.is_none()).count();
 
-            let title = format!(
-                "### {} • {} task(s) ({} open, {} done)",
-                df.date.format(DATE_FORMAT),
+            writeln!(out)?;
+            let title = format!("## {}", df.date.format(DATE_FORMAT));
+            writeln!(out, "{}", title)?;
+
+            writeln!(
+                out,
+                "**{} tasks** - **{} open** - **{} done**\n",
                 total_item_count,
                 total_open_item_count,
                 total_item_count - total_open_item_count
-            );
+            )?;
 
-            writeln!(out, "{}", title)?;
-
-            for (index, item) in df.items.iter().enumerate() {
+            for item in &df.items {
                 let is_done = item.done_at.is_some();
-                let next_index = (index + 1).to_string();
+                let text = if is_done {
+                    format_args!("~~{}~~", item.text)
+                } else {
+                    format_args!("{}", item.text)
+                };
+
                 writeln!(
                     &mut out,
-                    "{}. {} {} {}",
-                    next_index,
-                    is_done,
-                    item.text,
-                    item.priority
+                    "{} {text} {}",
+                    if is_done { "- [x]" } else { "- [ ]" },
+                    format_args!("*({})*", item.priority)
                 )?;
             }
+            writeln!(out)?;
         }
 
         Ok(())
