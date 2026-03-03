@@ -3,7 +3,7 @@ use std::io::{self, Write};
 use chrono::{Days, NaiveDate};
 
 use crate::{
-    display::{renderer::Renderer, terminal::DATE_FORMAT},
+    display::{renderer::Renderer, terminal::{DATE_FORMAT, DATE_WITH_TIME_FORMAT}},
     models::{dayfile::DayFile, item::Item},
     utils::{
         helpers::{item_count_meta, stats},
@@ -17,9 +17,11 @@ pub struct MarkdownRenderer;
 impl Renderer for MarkdownRenderer {
     fn render_day(&self, df: &DayFile) -> std::io::Result<()> {
         let mut out = io::stdout().lock();
-        let title = self.build_title(df.date, None);
 
+        let title = self.build_date_line(df.date, None);
+        writeln!(out, "# Tasks")?;
         writeln!(out, "{}", title)?;
+        writeln!(out)?;
 
         if df.items.is_empty() {
             writeln!(
@@ -29,7 +31,7 @@ impl Renderer for MarkdownRenderer {
             )?;
 
             let hint = r#"tusk add "Drink more water 💦""#;
-            writeln!(out, "   _Add one with: {}_", hint)?;
+            writeln!(out, "_Add one with: {}_", hint)?;
         }
 
         self.render_list(&mut out, &df.items)?;
@@ -38,8 +40,36 @@ impl Renderer for MarkdownRenderer {
         Ok(())
     }
 
-    fn render_summary(&self, _date: NaiveDate, _index: usize, _item: &Item) -> std::io::Result<()> {
-        todo!()
+    fn render_summary(&self, _date: NaiveDate, index: usize, item: &Item) -> std::io::Result<()> {
+        let mut out = io::stdout().lock();
+
+        let create_at = item.created_at.format(DATE_WITH_TIME_FORMAT);
+
+        writeln!(out, "# #{} - {}", index, item.text)?;
+        writeln!(out)?;
+
+        writeln!(
+            out,
+            "**Status:** {}  ",
+            item.status()
+        )?;
+        writeln!(out, "**Priority:** {}  ", item.priority)?;
+        writeln!(out, "**Created:** {}  ", create_at)?;
+
+        if let Some(done_at) = item.done_at {
+            writeln!(out, "**Completed:** {}  ", done_at.format(DATE_WITH_TIME_FORMAT))?;
+        }
+        
+        if let Some(n) = &item.notes {
+            writeln!(out)?;
+            writeln!(out, "---")?;
+            writeln!(out)?;
+            writeln!(out, "## Notes")?;
+            writeln!(out)?;
+            writeln!(out, "{n}")?;
+        }
+
+        Ok(())
     }
 
     fn render_migrate(
@@ -50,8 +80,11 @@ impl Renderer for MarkdownRenderer {
         dry_run: bool,
     ) -> std::io::Result<()> {
         let mut out = io::stdout().lock();
-        let title = self.build_title(to_date, Some(from_df_original.date));
+
+        writeln!(out, "# Migration")?;
+        let title = self.build_date_line(to_date, Some(from_df_original.date));
         writeln!(out, "{}", title)?;
+        writeln!(out)?;
 
         if moved_items.is_empty() {
             writeln!(out, "> 🦣 No tasks to migrate.")?;
@@ -169,17 +202,17 @@ impl Renderer for MarkdownRenderer {
 }
 
 impl MarkdownRenderer {
-    fn build_title(&self, to_date: NaiveDate, migration_date: Option<NaiveDate>) -> String {
-        let to_date_s = to_date.format("%a %d %b %Y").to_string();
-
-        let title = if let Some(migration_date) = migration_date {
-            let from_date_s = migration_date.format("%a %d %b %Y").to_string();
-            format!("# Migration from {} → {}", from_date_s, to_date_s)
+    fn build_date_line(&self, to_date: NaiveDate, migration_date: Option<NaiveDate>) -> String {
+        if let Some(migration_date) = migration_date {
+            let from_date_s = migration_date.format("%a %d %b %Y");
+            format!(
+                "From **{}** → **{}**",
+                from_date_s,
+                to_date.format("%a %d %b %Y")
+            )
         } else {
-            format!("# Tasks for {}", to_date_s)
-        };
-
-        title
+            format!("On **{}**", to_date.format("%a %d %b %Y"))
+        }
     }
 
     fn render_list(&self, out: &mut impl Write, items: &[Item]) -> std::io::Result<()> {
@@ -199,9 +232,10 @@ impl MarkdownRenderer {
     fn render_footer(&self, out: &mut impl Write, dayfile: &DayFile) -> std::io::Result<()> {
         let stats = stats(dayfile);
 
+        writeln!(out)?;
         writeln!(
             out,
-            "\n{} task(s) ({} open, {} done)",
+            "> **{} task(s)** ({} open, {} done)",
             stats.total, stats.open, stats.completed
         )?;
 
@@ -228,9 +262,16 @@ impl MarkdownRenderer {
             "migrated:"
         };
 
-        let date_s = date.format("%a %d %b %Y").to_string();
+        writeln!(out)?;
 
-        writeln!(out, "  ↪ {} {} {} {}", count, item_word, details, date_s,)?;
+        writeln!(
+            out,
+            "> {} {} {} {}",
+            count,
+            item_word,
+            details,
+            date.format("%a %d %b %Y")
+        )?;
 
         Ok(())
     }

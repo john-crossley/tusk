@@ -31,6 +31,16 @@ pub enum ItemStatus {
     Done,
 }
 
+impl fmt::Display for ItemStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self {
+            ItemStatus::Open => "open",
+            ItemStatus::Done => "done",
+        };
+        f.write_str(s)
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Item {
     pub id: String,

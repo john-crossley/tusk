@@ -8,11 +8,16 @@ use std::{
 use crate::{
     display::renderer::Renderer,
     models::{dayfile::DayFile, item::Item},
-    utils::{helpers::{item_count_meta, stats}, render::ActionKind, theme::Theme, tusk_error::TuskError},
+    utils::{
+        helpers::{item_count_meta, stats},
+        render::ActionKind,
+        theme::Theme,
+        tusk_error::TuskError,
+    },
 };
 
 pub const DATE_FORMAT: &str = "%a %d %b %Y";
-pub const DATE_WITH_TIME_FORMAT: &str = "%Y-%m-%d %H:%M";
+pub const DATE_WITH_TIME_FORMAT: &str = "%a %d %b %Y %H:%M";
 
 pub struct TerminalRenderer {
     pub theme: Theme,
@@ -85,20 +90,19 @@ impl Renderer for TerminalRenderer {
             item.created_at.format(DATE_WITH_TIME_FORMAT)
         )?;
 
-        // Done
-        let done_s = match &item.done_at {
-            Some(ts) => ts.format(DATE_WITH_TIME_FORMAT).to_string(),
-            None => "not yet".into(),
-        };
+        writeln!(out, "    {} {}", self.theme.dim("Status:"), item.status())?;
 
-        writeln!(out, "    {} {}", self.theme.dim("Done:"), done_s)?;
+        if let Some(ts) = item.done_at {
+            let done_at = ts.format(DATE_WITH_TIME_FORMAT);
+            writeln!(out, "    {} {}", self.theme.dim("Done:"), done_at)?;
+        }
 
         if let Some(migrated_from) = item.migrated_from {
             writeln!(
                 out,
                 "    {} {}",
                 self.theme.dim("Migrated from:"),
-                migrated_from.format(DATE_FORMAT).to_string()
+                migrated_from.format(DATE_WITH_TIME_FORMAT).to_string()
             )?;
         }
 
@@ -151,8 +155,8 @@ impl Renderer for TerminalRenderer {
             .expect("end should always be at least one day after start");
 
         // Build title
-        let start_s = start.format(DATE_FORMAT).to_string();
-        let end_s = display_end.format(DATE_FORMAT).to_string();
+        let start_s = start.format(DATE_FORMAT);
+        let end_s = display_end.format(DATE_FORMAT);
 
         let raw_title = format!("Review: {start_s} → {end_s}");
 
@@ -183,25 +187,25 @@ impl Renderer for TerminalRenderer {
             &mut out,
             "  {} {}",
             self.theme.dim("Total:"),
-            self.theme.info(&count.total.to_string())
+            self.theme.info(&count.total)
         )?;
         writeln!(
             &mut out,
             "  {} {}",
             self.theme.dim("Open:"),
-            self.theme.warn(&count.open.to_string())
+            self.theme.warn(&count.open)
         )?;
         writeln!(
             &mut out,
             "  {} {}",
             self.theme.dim("Completed:"),
-            self.theme.ok(&count.complete.to_string())
+            self.theme.ok(&count.complete)
         )?;
         writeln!(
             &mut out,
             "  {} {}",
             self.theme.dim("Active days:"),
-            self.theme.info(&dayfiles.len().to_string())
+            self.theme.info(&dayfiles.len())
         )?;
         writeln!(&mut out)?;
 
