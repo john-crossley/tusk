@@ -37,7 +37,7 @@ use crate::{
                   Add tasks, list them, mark them as done, and export to Markdown with zero friction.",
     subcommand = "ls"
 )]
-struct Cli {
+pub struct Cli {
     /// Override the base data directory (default: platform-specific app data dir).
     #[arg(long, value_name = "DIR")]
     data_dir: Option<PathBuf>,
@@ -168,6 +168,16 @@ enum Commands {
         #[arg(name = "days", long)]
         days: Option<u64>,
     },
+
+    /// Manage persistent focus tasks
+    #[clap(subcommand)]
+    Focus(FocusCommands),
+}
+
+#[derive(Subcommand, Debug)]
+enum FocusCommands {
+    #[command(name = "ls", about = "List long running items.")]
+    Ls,
 }
 
 fn main() {
@@ -210,7 +220,14 @@ fn dispatch(cli: &Cli) -> Result<(), TuskError> {
             dry_run,
         }) => run_migrate(&cli, from_date, to_date, *dry_run),
         Some(Commands::Review { days }) => run_review(&cli, *days),
+        Some(Commands::Focus(focus_commands)) => dispatch_focus(cli, focus_commands),
         None => run_ls(&cli, None, &[]),
+    }
+}
+
+fn dispatch_focus(cli: &Cli, commands: &FocusCommands) -> Result<(), TuskError> {
+    match commands {
+        FocusCommands::Ls {} => run_ls(cli, None, &[]),
     }
 }
 
@@ -487,6 +504,9 @@ fn command_name(cmd: Option<&Commands>) -> &'static str {
         Some(Commands::Show { .. }) => "show",
         Some(Commands::Migrate { .. }) => "migrate",
         Some(Commands::Review { .. }) => "review",
+        Some(Commands::Focus(focus_cmd)) => match focus_cmd {
+            FocusCommands::Ls { .. } => "focus ls",
+        },
         None => "ls",
     }
 }

@@ -154,9 +154,9 @@ impl Renderer for MarkdownRenderer {
             for item in &df.items {
                 let is_done = item.done_at.is_some();
                 let text = if is_done {
-                    format_args!("~~{}~~", item.text)
+                    format!("~~{}~~", item.text)
                 } else {
-                    format_args!("{}", item.text)
+                    format!("{}", item.text)
                 };
 
                 writeln!(
