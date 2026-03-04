@@ -178,6 +178,12 @@ enum Commands {
 enum FocusCommands {
     #[command(name = "ls", about = "List long running items.")]
     Ls,
+
+    #[command(name = "add", about = "Add a new long running item.")]
+    Add {
+        /// The description of the item being added.
+        text: String,
+    },
 }
 
 fn main() {
@@ -201,7 +207,7 @@ fn dispatch(cli: &Cli) -> Result<(), TuskError> {
             text,
             priority,
             attach_notes,
-        }) => run_add(&cli, *date, text, *priority, attach_notes),
+        }) => run_add(&cli, *date, text, *priority, *attach_notes),
         Some(Commands::Ls { date, tags }) => run_ls(cli, *date, tags.as_deref().unwrap_or(&[])),
         Some(Commands::Done { date, index }) => run_done(&cli, *date, *index, true),
         Some(Commands::Undone { date, index }) => run_done(&cli, *date, *index, false),
@@ -228,6 +234,7 @@ fn dispatch(cli: &Cli) -> Result<(), TuskError> {
 fn dispatch_focus(cli: &Cli, commands: &FocusCommands) -> Result<(), TuskError> {
     match commands {
         FocusCommands::Ls {} => run_ls(cli, None, &[]),
+        FocusCommands::Add { text } => run_add(cli, None, text, None, false)
     }
 }
 
@@ -238,7 +245,7 @@ fn run_add(
     date: Option<NaiveDate>,
     text: &str,
     priority: Option<ItemPriority>,
-    attach_notes: &bool,
+    attach_notes: bool,
 ) -> Result<(), TuskError> {
     let new_text = sanitise_str(text)?;
     let tags = extract_tags(text);
@@ -246,7 +253,7 @@ fn run_add(
     let (date, path) = current_day_context(cli, date)?;
     let mut df = load_or_create_dayfile(&path, date)?;
 
-    let notes = if *attach_notes {
+    let notes = if attach_notes {
         Some(edit_in_editor("# Notes")?)
     } else {
         None
@@ -506,6 +513,7 @@ fn command_name(cmd: Option<&Commands>) -> &'static str {
         Some(Commands::Review { .. }) => "review",
         Some(Commands::Focus(focus_cmd)) => match focus_cmd {
             FocusCommands::Ls { .. } => "focus ls",
+            FocusCommands::Add { .. } => "focus add",
         },
         None => "ls",
     }
