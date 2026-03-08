@@ -1,12 +1,4 @@
-use std::{io::Error, path::PathBuf};
-
-use chrono::NaiveDate;
-
-use crate::{
-    Cli,
-    models::dayfile::DayFile,
-    utils::{dates::todays_date, files::resolve_day_file_path, tusk_error::TuskError},
-};
+use crate::{models::dayfile::DayFile, utils::tusk_error::TuskError};
 
 pub fn validate_index(i: usize, len: usize) -> Result<usize, TuskError> {
     if i == 0 || i > len {
@@ -16,24 +8,9 @@ pub fn validate_index(i: usize, len: usize) -> Result<usize, TuskError> {
     Ok(i - 1)
 }
 
-pub fn current_day_context(
-    cli: &Cli,
-    date: Option<NaiveDate>,
-) -> Result<(NaiveDate, PathBuf), Error> {
-    let date = date.unwrap_or_else(todays_date);
-
-    let path = resolve_day_file_path(
-        &date,
-        cli.data_dir.as_deref(),
-        cli.verbose,
-        cli.vault.as_deref(),
-    )?;
-
-    Ok((date, path))
-}
-
 pub fn sanitise_str(text: &str) -> Result<String, TuskError> {
     let trimmed = text.trim();
+
     if trimmed.is_empty() {
         Err(TuskError::InvalidInput {
             message: "Oops, did you forget to add some text?".to_string(),
@@ -51,7 +28,6 @@ pub fn extract_tags(s: &str) -> Vec<String> {
 
 pub fn warn_dayfile_error(
     date: chrono::NaiveDate,
-    path: &std::path::Path,
     err: &std::io::Error,
     verbose: bool,
 ) {
@@ -63,9 +39,8 @@ pub fn warn_dayfile_error(
 
     if verbose {
         eprintln!(
-            "warn: {} — failed to load dayfile\n      path: {}\n      error: {}",
+            "warn: {} — failed to load dayfile\n     error: {}",
             date,
-            path.display(),
             err
         );
     }

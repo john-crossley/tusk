@@ -1,114 +1,26 @@
-use std::{
-    fs::{File, create_dir_all},
-    io::{self, BufReader, BufWriter, Error, ErrorKind, Write},
-    path::{Path, PathBuf},
+use std::io::{self, Error};
+
+use chrono::NaiveDate;
+
+use crate::{
+    CommandContext,
+    models::dayfile::DayFile,
+    store::{day_store::DayStore, fsday_store::FsDayStore},
+    utils::dates::todays_date,
 };
 
-use chrono::{Datelike, NaiveDate};
-use directories::ProjectDirs;
+pub fn load_or_empty(ctx: &CommandContext, date: Option<NaiveDate>) -> Result<DayFile, Error> {
+    let date = date.unwrap_or(todays_date());
+    let store = FsDayStore::new(ctx.data_dir.clone(), ctx.vault.as_deref())?;
 
-use crate::models::dayfile::DayFile;
-
-pub fn tusk_data_root(vault: Option<&str>) -> io::Result<PathBuf> {
-    let root = match ProjectDirs::from("io", "jonnothebonno", "tusk") {
-        Some(project_dir) => project_dir.data_dir().to_owned(),
-        None => {
-            return Err(io::Error::new(
-                io::ErrorKind::NotFound,
-                "could not determine platform data directory",
-            ));
-        }
-    };
-
-    Ok(root.join("vaults").join(normalise_or_default(vault)))
-}
-
-pub fn resolve_day_file_path(
-    date: &NaiveDate,
-    base_dir: Option<&Path>,
-    verbose: bool,
-    vault: Option<&str>,
-) -> io::Result<PathBuf> {
-    let year = NaiveDate::year(date);
-    let month = NaiveDate::month(date);
-
-    let mut working_dir = base_dir
-        .map(|p| p.to_path_buf())
-        .unwrap_or(tusk_data_root(vault)?);
-
-    working_dir.push(format!("{:04}", year));
-    working_dir.push(format!("{:02}", month));
-    working_dir.push(format!("{}.json", date));
-
-    if verbose {
-        eprintln!("[🦣] File: {}", working_dir.display())
-    }
-
-    Ok(working_dir)
-}
-
-pub fn save_dayfile(path: &Path, dayfile: &DayFile) -> Result<(), Error> {
-    if let Some(parent_path) = path.parent() {
-        create_dir_all(parent_path)?;
-    }
-
-    let file = File::create(path)?;
-    let mut writer = BufWriter::new(file);
-    serde_json::to_writer_pretty(&mut writer, &dayfile)?;
-    writer.write_all(b"\n")?;
-    writer.flush()?;
-
-    Ok(())
-}
-
-pub fn load_dayfile_if_exists(path: &Path) -> Result<DayFile, Error> {
-    let file = File::open(path)?;
-    let reader = BufReader::new(file);
-
-    serde_json::from_reader(reader).map_err(|e| {
-        Error::new(
-            ErrorKind::InvalidData,
-            format!("failed to parse JSON in {}: {}", path.display(), e),
-        )
-    })
-}
-
-pub fn load_or_create_dayfile(path: &Path, date: NaiveDate) -> Result<DayFile, Error> {
-    match load_dayfile_if_exists(path) {
+    match store.load(date) {
         Ok(df) => Ok(df),
-        Err(e) if e.kind() == io::ErrorKind::NotFound => create_new_dayfile(path, date),
-        Err(e) => Err(Error::new(
-            e.kind(),
-            format!("failed to load {}: {}", path.display(), e),
-        )),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(DayFile::new(date)),
+        Err(e) => Err(e.into()),
     }
 }
 
-fn create_new_dayfile(path: &Path, date: NaiveDate) -> io::Result<DayFile> {
-    let dayfile = DayFile {
-        date,
-        items: vec![],
-    };
-    save_dayfile(path, &dayfile)?;
-    Ok(dayfile)
-}
-
-fn normalise_or_default(vault: Option<&str>) -> String {
-    match vault {
-        None => "default".to_string(),
-        Some(s) => {
-            let filtered = s
-                .trim()
-                .chars()
-                .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
-                .collect::<String>()
-                .to_ascii_lowercase();
-
-            if filtered.is_empty() {
-                "default".to_string()
-            } else {
-                filtered
-            }
-        }
-    }
+pub fn save_dayfile(ctx: &CommandContext, df: &DayFile) -> Result<(), Error> {
+    let store = FsDayStore::new(ctx.data_dir.clone(), ctx.vault.as_deref())?;
+    store.save(df)
 }

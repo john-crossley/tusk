@@ -8,6 +8,7 @@ use clap::{Parser, Subcommand};
 
 mod display;
 mod models;
+mod store;
 mod utils;
 
 use crate::{
@@ -18,12 +19,8 @@ use crate::{
     utils::{
         dates::{parse_ymd, todays_date},
         editor::edit_in_editor,
-        files::{
-            load_dayfile_if_exists, load_or_create_dayfile, resolve_day_file_path, save_dayfile,
-        },
-        helpers::{
-            current_day_context, extract_tags, sanitise_str, validate_index, warn_dayfile_error,
-        },
+        files::{load_or_empty, save_dayfile},
+        helpers::{extract_tags, sanitise_str, validate_index, warn_dayfile_error},
         render::{ActionKind, RenderOpts, RenderOutput, make_renderer},
         tusk_error::TuskError,
     },
@@ -71,7 +68,7 @@ enum Commands {
 
         /// Filter tasks by one or more tags
         #[arg(long = "tag", num_args = 1..)]
-        tags: Option<Vec<String>>,
+        tags: Vec<String>,
     },
 
     #[command(name = "add", about = "Add a new item to your day")]
@@ -186,13 +183,30 @@ enum FocusCommands {
     },
 }
 
+struct CommandContext {
+    data_dir: Option<PathBuf>,
+    vault: Option<String>,
+    render_opts: RenderOpts,
+}
+
+impl From<&Cli> for CommandContext {
+    fn from(cli: &Cli) -> Self {
+        Self {
+            data_dir: cli.data_dir.clone(),
+            vault: cli.vault.clone(),
+            render_opts: RenderOpts::from(cli),
+        }
+    }
+}
+
 fn main() {
     let cli = Cli::parse();
-    let opts = RenderOpts::from(&cli);
-    let renderer = make_renderer(&opts);
+    let cmd_ctx = CommandContext::from(&cli);
+    let renderer = make_renderer(&cmd_ctx.render_opts);
+    let cmd_name = command_name(cli.command.as_ref());
 
-    if let Err(e) = dispatch(&cli) {
-        if let Err(render_err) = renderer.render_error(command_name(cli.command.as_ref()), &e) {
+    if let Err(e) = dispatch(cli, cmd_ctx) {
+        if let Err(render_err) = renderer.render_error(cmd_name, &e) {
             eprintln!("Tusk: {e}");
             eprintln!("Failed to render error: {render_err}");
         }
@@ -200,61 +214,59 @@ fn main() {
     }
 }
 
-fn dispatch(cli: &Cli) -> Result<(), TuskError> {
-    match cli.command.as_ref() {
+fn dispatch(cli: Cli, ctx: CommandContext) -> Result<(), TuskError> {
+    match cli.command {
         Some(Commands::Add {
             date,
             text,
             priority,
             attach_notes,
-        }) => run_add(&cli, *date, text, *priority, *attach_notes),
-        Some(Commands::Ls { date, tags }) => run_ls(cli, *date, tags.as_deref().unwrap_or(&[])),
-        Some(Commands::Done { date, index }) => run_done(&cli, *date, *index, true),
-        Some(Commands::Undone { date, index }) => run_done(&cli, *date, *index, false),
-        Some(Commands::Rm { date, index }) => run_rm(&cli, *date, *index),
+        }) => run_add(date, text, priority, attach_notes, ctx),
+        Some(Commands::Ls { date, tags }) => run_ls(date, tags, ctx),
+        Some(Commands::Done { date, index }) => run_done(date, index, true, ctx),
+        Some(Commands::Undone { date, index }) => run_done(date, index, false, ctx),
+        Some(Commands::Rm { date, index }) => run_rm(date, index, ctx),
         Some(Commands::Edit {
             date,
             index,
             text,
             attach_notes,
             priority,
-        }) => run_edit(&cli, *date, *index, text, attach_notes, *priority),
-        Some(Commands::Show { date, index }) => run_show(&cli, *date, *index),
+        }) => run_edit(date, index, text, attach_notes, priority, ctx),
+        Some(Commands::Show { date, index }) => run_show(date, index, ctx),
         Some(Commands::Migrate {
             from_date,
             to_date,
             dry_run,
-        }) => run_migrate(&cli, from_date, to_date, *dry_run),
-        Some(Commands::Review { days }) => run_review(&cli, *days),
-        Some(Commands::Focus(focus_commands)) => dispatch_focus(cli, focus_commands),
-        None => run_ls(&cli, None, &[]),
+        }) => run_migrate(from_date, to_date, dry_run, ctx),
+        Some(Commands::Review { days }) => run_review(days, ctx),
+        Some(Commands::Focus(focus_commands)) => dispatch_focus(focus_commands, ctx),
+        None => run_ls(None, vec![], ctx),
     }
 }
 
-fn dispatch_focus(cli: &Cli, commands: &FocusCommands) -> Result<(), TuskError> {
+fn dispatch_focus(commands: FocusCommands, ctx: CommandContext) -> Result<(), TuskError> {
     match commands {
-        FocusCommands::Ls {} => run_ls(cli, None, &[]),
-        FocusCommands::Add { text } => run_add(cli, None, text, None, false)
+        FocusCommands::Ls {} => run_ls(None, vec![], ctx),
+        FocusCommands::Add { text } => run_add(None, text, None, false, ctx),
     }
 }
 
 // command handler functions
 
 fn run_add(
-    cli: &Cli,
     date: Option<NaiveDate>,
-    text: &str,
+    text: String,
     priority: Option<ItemPriority>,
     attach_notes: bool,
+    ctx: CommandContext,
 ) -> Result<(), TuskError> {
-    let new_text = sanitise_str(text)?;
-    let tags = extract_tags(text);
-
-    let (date, path) = current_day_context(cli, date)?;
-    let mut df = load_or_create_dayfile(&path, date)?;
+    let new_text = sanitise_str(&text)?;
+    let tags = extract_tags(&text);
+    let mut df = load_or_empty(&ctx, date)?;
 
     let notes = if attach_notes {
-        Some(edit_in_editor("# Notes")?)
+        Some(edit_in_editor("")?)
     } else {
         None
     };
@@ -266,50 +278,46 @@ fn run_add(
         notes,
     ));
 
-    save_dayfile(&path, &df)?;
+    save_dayfile(&ctx, &df)?;
 
     if let Some(item) = df.items.last() {
-        let opts: RenderOpts = cli.into();
-        let renderer = make_renderer(&opts);
-
+        let renderer = make_renderer(&ctx.render_opts);
         renderer.render_summary(df.date, df.items.len(), item)?;
     }
 
     Ok(())
 }
 
-fn run_ls(cli: &Cli, date: Option<NaiveDate>, tags: &[String]) -> Result<(), TuskError> {
-    let (date, path) = current_day_context(cli, date)?;
-    let mut dayfile = load_or_create_dayfile(&path, date)?;
+fn run_ls(
+    date: Option<NaiveDate>,
+    tags: Vec<String>,
+    ctx: CommandContext,
+) -> Result<(), TuskError> {
+    let df = load_or_empty(&ctx, date)?;
+    let renderer = make_renderer(&ctx.render_opts);
 
-    if !tags.is_empty() {
-        dayfile.items.retain(|i| {
-            tags.iter()
-                .all(|t| i.tags.iter().any(|it| it.eq_ignore_ascii_case(t)))
-        });
-    }
+    let render_df = if tags.is_empty() {
+        df
+    } else {
+        df.filtered_by_tags(&tags)
+    };
 
-    let opts: RenderOpts = cli.into();
-    let renderer = make_renderer(&opts);
-
-    renderer.render_day(&dayfile)?;
+    renderer.render_day(&render_df)?;
 
     Ok(())
 }
 
 fn run_done(
-    cli: &Cli,
     date: Option<NaiveDate>,
-    idx: usize,
+    index: usize,
     mark_done: bool,
+    ctx: CommandContext,
 ) -> Result<(), TuskError> {
-    let (date, path) = current_day_context(cli, date)?;
-    let mut dayfile = load_or_create_dayfile(&path, date)?;
-
-    let pos = validate_index(idx, dayfile.items.len())?;
+    let mut df = load_or_empty(&ctx, date)?;
+    let pos = validate_index(index, df.items.len())?;
 
     {
-        let item = &mut dayfile.items[pos];
+        let item = &mut df.items[pos];
         item.done_at = if mark_done {
             item.done_at.take().or(Some(Utc::now()))
         } else {
@@ -317,8 +325,8 @@ fn run_done(
         };
     }
 
-    let item = &dayfile.items[pos];
-    save_dayfile(&path, &dayfile)?;
+    let item = &df.items[pos];
+    save_dayfile(&ctx, &df)?;
 
     let action = if mark_done {
         ActionKind::Done
@@ -326,82 +334,79 @@ fn run_done(
         ActionKind::Undone
     };
 
-    let renderer = make_renderer(&cli.into());
-    renderer.render_action(idx, date, action, Some(&item))?;
+    let renderer = make_renderer(&ctx.render_opts);
+    renderer.render_action(index, df.date, action, Some(&item))?;
 
     Ok(())
 }
 
-fn run_rm(cli: &Cli, date: Option<NaiveDate>, idx: usize) -> Result<(), TuskError> {
-    let (date, path) = current_day_context(cli, date)?;
-    let mut dayfile = load_or_create_dayfile(&path, date)?;
+fn run_rm(date: Option<NaiveDate>, index: usize, ctx: CommandContext) -> Result<(), TuskError> {
+    let mut df = load_or_empty(&ctx, date)?;
 
-    let pos = validate_index(idx, dayfile.items.len())?;
-    let item = dayfile.items.remove(pos);
-    save_dayfile(&path, &dayfile)?;
+    let pos = validate_index(index, df.items.len())?;
+    let item = df.items.remove(pos);
+    save_dayfile(&ctx, &df)?;
 
-    let renderer = make_renderer(&cli.into());
-    renderer.render_action(idx, date, ActionKind::Removed, Some(&item))?;
+    let renderer = make_renderer(&ctx.render_opts);
+    renderer.render_action(index, df.date, ActionKind::Removed, Some(&item))?;
 
     Ok(())
 }
 
 fn run_edit(
-    cli: &Cli,
     date: Option<NaiveDate>,
-    idx: usize,
-    text: &Option<String>,
-    attach_notes: &bool,
+    index: usize,
+    text: Option<String>,
+    attach_notes: bool,
     priority: Option<ItemPriority>,
+    ctx: CommandContext,
 ) -> Result<(), TuskError> {
-    let (date, path) = current_day_context(cli, date)?;
-    let mut dayfile = load_or_create_dayfile(&path, date)?;
+    let mut df = load_or_empty(&ctx, date)?;
+    let pos = validate_index(index, df.items.len())?;
 
-    let pos = validate_index(idx, dayfile.items.len())?;
-
-    if let Some(item) = dayfile.items.get_mut(pos) {
+    if let Some(item) = df.items.get_mut(pos) {
         if let Some(s) = text {
-            item.text = sanitise_str(s)?;
+            item.text = sanitise_str(&s)?;
         }
 
-        let notes = if *attach_notes {
-            let template = item.notes.as_deref().unwrap_or("# Notes");
+        let notes = if attach_notes {
+            let template = item.notes.as_deref().unwrap_or("");
             Some(edit_in_editor(&template)?)
         } else {
             None
         };
 
-        item.notes = notes;
+        if notes.is_some() {
+            item.notes = notes;
+        }
 
         if let Some(p) = priority {
             item.priority = p;
         }
 
-        save_dayfile(&path, &dayfile)?;
+        save_dayfile(&ctx, &df)?;
     }
 
     Ok(())
 }
 
-fn run_show(cli: &Cli, date: Option<NaiveDate>, idx: usize) -> Result<(), TuskError> {
-    let (date, path) = current_day_context(cli, date)?;
-    let mut df = load_or_create_dayfile(&path, date)?;
-    let pos = validate_index(idx, df.items.len())?;
+fn run_show(date: Option<NaiveDate>, index: usize, ctx: CommandContext) -> Result<(), TuskError> {
+    let mut df = load_or_empty(&ctx, date)?;
+    let pos = validate_index(index, df.items.len())?;
 
     if let Some(item) = df.items.get_mut(pos) {
-        let opts: RenderOpts = cli.into();
-        let renderer = make_renderer(&opts);
-        renderer.render_summary(df.date, idx, item)?;
+        let renderer = make_renderer(&ctx.render_opts);
+        renderer.render_summary(df.date, index, item)?;
     }
 
     Ok(())
 }
 
 fn run_migrate(
-    cli: &Cli,
-    from_date: &Option<NaiveDate>,
-    to_date: &Option<NaiveDate>,
+    from_date: Option<NaiveDate>,
+    to_date: Option<NaiveDate>,
     dry_run: bool,
+    ctx: CommandContext,
 ) -> Result<(), TuskError> {
     let from_date = from_date.unwrap_or_else(todays_date);
     let to_date = to_date.unwrap_or_else(todays_date);
@@ -412,27 +417,11 @@ fn run_migrate(
         });
     }
 
-    let from_df_path = resolve_day_file_path(
-        &from_date,
-        cli.data_dir.as_deref(),
-        cli.verbose,
-        cli.vault.as_deref(),
-    )?;
-
-    let to_df_path = resolve_day_file_path(
-        &to_date,
-        cli.data_dir.as_deref(),
-        cli.verbose,
-        cli.vault.as_deref(),
-    )?;
-
-    let mut from_df = load_or_create_dayfile(&from_df_path, from_date)?;
+    let mut from_df = load_or_empty(&ctx, Some(from_date))?;
     let from_df_before = from_df.clone();
 
-    let mut to_df = load_or_create_dayfile(&to_df_path, to_date)?;
-    let opts: RenderOpts = cli.into();
-
-    let renderer = make_renderer(&opts);
+    let mut to_df = load_or_empty(&ctx, Some(to_date))?;
+    let renderer = make_renderer(&ctx.render_opts);
 
     if dry_run {
         let mut pending_items = from_df.migratable_items();
@@ -454,8 +443,8 @@ fn run_migrate(
         let moved_items = to_move.clone();
         to_df.items.extend(to_move);
 
-        save_dayfile(&from_df_path, &from_df)?;
-        save_dayfile(&to_df_path, &to_df)?;
+        save_dayfile(&ctx, &from_df)?;
+        save_dayfile(&ctx, &to_df)?;
 
         renderer.render_migrate(to_df.date, &from_df_before, &moved_items, false)?;
     }
@@ -463,8 +452,13 @@ fn run_migrate(
     Ok(())
 }
 
-fn run_review(cli: &Cli, days: Option<u64>) -> Result<(), TuskError> {
+fn run_review(days: Option<u64>, ctx: CommandContext) -> Result<(), TuskError> {
     let days = days.unwrap_or(1);
+
+    if days > 365 {
+        return Err(TuskError::InvalidInput { message: "Review can't be more than 365 days".to_string() });
+    }
+
     let today = todays_date();
 
     let start = today
@@ -472,29 +466,21 @@ fn run_review(cli: &Cli, days: Option<u64>) -> Result<(), TuskError> {
         .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "data underflow"))?;
 
     let end = today;
-    let opts: RenderOpts = cli.into();
 
     let mut dayfiles: Vec<DayFile> = Vec::new();
 
     for d in start.iter_days().take_while(|d| *d < end) {
-        let path = resolve_day_file_path(
-            &d,
-            cli.data_dir.as_deref(),
-            opts.verbose,
-            opts.vault_name.as_deref(),
-        )?;
-
-        match load_dayfile_if_exists(&path) {
+        match load_or_empty(&ctx, Some(d)) {
             Ok(df) => {
                 if !df.items.is_empty() {
                     dayfiles.push(df);
                 }
             }
-            Err(e) => warn_dayfile_error(d, &path, &e, cli.verbose),
+            Err(e) => warn_dayfile_error(d, &e, ctx.render_opts.verbose),
         }
     }
 
-    let renderer = make_renderer(&opts);
+    let renderer = make_renderer(&ctx.render_opts);
     renderer.render_review(start, end, days, &dayfiles)?;
 
     Ok(())
