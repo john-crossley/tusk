@@ -5,7 +5,7 @@ use chrono::NaiveDate;
 use crate::{
     CommandContext,
     models::dayfile::DayFile,
-    store::{day_store::DayStore, fsday_store::FsDayStore},
+    store::{day_store::DayStore, fs::day_store::FsDayStore},
     utils::dates::todays_date,
 };
 

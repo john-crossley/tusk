@@ -5,9 +5,14 @@ use std::{
 };
 
 use chrono::{Datelike, NaiveDate};
-use directories::ProjectDirs;
 
-use crate::{models::dayfile::DayFile, store::day_store::DayStore};
+use crate::{
+    models::dayfile::DayFile,
+    store::{
+        day_store::DayStore,
+        fs::shared::{normalise_or_default, tusk_data_root},
+    },
+};
 
 pub struct FsDayStore {
     pub base_dir: PathBuf,
@@ -17,7 +22,7 @@ pub struct FsDayStore {
 impl FsDayStore {
     pub fn new(base_dir: Option<PathBuf>, vault: Option<&str>) -> io::Result<Self> {
         Ok(Self {
-            base_dir: base_dir.unwrap_or(Self::tusk_data_root()?),
+            base_dir: base_dir.unwrap_or(tusk_data_root()?),
             vault: vault.map(|v| v.to_string()),
         })
     }
@@ -28,44 +33,10 @@ impl FsDayStore {
 
         self.base_dir
             .join("vaults")
-            .join(Self::normalise_or_default(self.vault.as_deref()))
+            .join(normalise_or_default(self.vault.as_deref()))
             .join(format!("{:04}", year))
             .join(format!("{:02}", month))
             .join(format!("{}.json", date))
-    }
-
-    fn tusk_data_root() -> io::Result<PathBuf> {
-        let root = match ProjectDirs::from("io", "jonnothebonno", "tusk") {
-            Some(proj_dir) => proj_dir.data_dir().to_owned(),
-            None => {
-                return Err(io::Error::new(
-                    io::ErrorKind::NotFound,
-                    "could not determine platform data directory.",
-                ));
-            }
-        };
-
-        Ok(root)
-    }
-
-    fn normalise_or_default(vault: Option<&str>) -> String {
-        match vault {
-            None => "default".to_string(),
-            Some(s) => {
-                let filtered = s
-                    .trim()
-                    .chars()
-                    .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
-                    .collect::<String>()
-                    .to_ascii_lowercase();
-
-                if filtered.is_empty() {
-                    "default".to_string()
-                } else {
-                    filtered
-                }
-            }
-        }
     }
 }
 
@@ -94,8 +65,9 @@ impl DayStore for FsDayStore {
     fn save(&self, df: &DayFile) -> Result<(), std::io::Error> {
         let path = self.dayfile_path(&df.date);
 
-        // TODO: Should we move this into a helper?
-        if let Some(parent_path) = path.parent() && !parent_path.exists() {
+        if let Some(parent_path) = path.parent()
+            && !parent_path.exists()
+        {
             create_dir_all(parent_path)?;
         }
 

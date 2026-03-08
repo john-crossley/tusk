@@ -6,11 +6,6 @@ use std::{
 use chrono::{Days, NaiveDate, Utc};
 use clap::{Parser, Subcommand};
 
-mod display;
-mod models;
-mod store;
-mod utils;
-
 use crate::{
     models::{
         dayfile::DayFile,
@@ -25,6 +20,11 @@ use crate::{
         tusk_error::TuskError,
     },
 };
+
+mod display;
+mod models;
+mod store;
+mod utils;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -456,7 +456,9 @@ fn run_review(days: Option<u64>, ctx: CommandContext) -> Result<(), TuskError> {
     let days = days.unwrap_or(1);
 
     if days > 365 {
-        return Err(TuskError::InvalidInput { message: "Review can't be more than 365 days".to_string() });
+        return Err(TuskError::InvalidInput {
+            message: "Review can't be more than 365 days".to_string(),
+        });
     }
 
     let today = todays_date();
