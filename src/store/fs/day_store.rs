@@ -1,8 +1,4 @@
-use std::{
-    fs::{File, create_dir_all},
-    io::{self, BufReader, BufWriter, Error, ErrorKind, Write},
-    path::PathBuf,
-};
+use std::{io, path::PathBuf};
 
 use chrono::{Datelike, NaiveDate};
 
@@ -10,7 +6,7 @@ use crate::{
     models::dayfile::DayFile,
     store::{
         day_store::DayStore,
-        fs::shared::{normalise_or_default, tusk_data_root},
+        fs::shared::{normalise_or_default, read_json, save_to_json, tusk_data_root},
     },
 };
 
@@ -43,40 +39,11 @@ impl FsDayStore {
 impl DayStore for FsDayStore {
     fn load(&self, date: NaiveDate) -> Result<DayFile, std::io::Error> {
         let path = self.dayfile_path(&date);
-
-        if !path.exists() {
-            return Err(Error::new(
-                ErrorKind::NotFound,
-                format!("failed to load dayfile at {}", path.display()),
-            ));
-        }
-
-        let file = File::open(&path)?;
-        let reader = BufReader::new(file);
-
-        serde_json::from_reader(reader).map_err(|e| {
-            Error::new(
-                ErrorKind::InvalidData,
-                format!("failed to parse JSON in {}: {}", path.display(), e),
-            )
-        })
+        read_json(&path)
     }
 
     fn save(&self, df: &DayFile) -> Result<(), std::io::Error> {
         let path = self.dayfile_path(&df.date);
-
-        if let Some(parent_path) = path.parent()
-            && !parent_path.exists()
-        {
-            create_dir_all(parent_path)?;
-        }
-
-        let file = File::create(path)?;
-        let mut writer = BufWriter::new(file);
-        serde_json::to_writer_pretty(&mut writer, &df)?;
-        writer.write_all(b"\n")?;
-        writer.flush()?;
-
-        Ok(())
+        save_to_json(&path, df)
     }
 }
