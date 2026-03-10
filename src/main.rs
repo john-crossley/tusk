@@ -14,9 +14,11 @@ use crate::{
     utils::{
         dates::{parse_ymd, todays_date},
         editor::edit_in_editor,
-        files::{load_or_empty, save_dayfile},
+        files::{load_day_or_empty, load_focus_or_empty, save_dayfile, save_focusfile},
         helpers::{extract_tags, sanitise_str, validate_index, warn_dayfile_error},
+        list_scope::ListScope,
         render::{ActionKind, RenderOpts, RenderOutput, make_renderer},
+        task_target::TaskTarget,
         tusk_error::TuskError,
     },
 };
@@ -25,6 +27,7 @@ mod display;
 mod models;
 mod store;
 mod utils;
+mod view;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -221,7 +224,7 @@ fn dispatch(cli: Cli, ctx: CommandContext) -> Result<(), TuskError> {
             text,
             priority,
             attach_notes,
-        }) => run_add(date, text, priority, attach_notes, ctx),
+        }) => run_add(date, text, priority, attach_notes, ctx, TaskTarget::Day),
         Some(Commands::Ls { date, tags }) => run_ls(date, tags, ctx),
         Some(Commands::Done { date, index }) => run_done(date, index, true, ctx),
         Some(Commands::Undone { date, index }) => run_done(date, index, false, ctx),
@@ -248,7 +251,7 @@ fn dispatch(cli: Cli, ctx: CommandContext) -> Result<(), TuskError> {
 fn dispatch_focus(commands: FocusCommands, ctx: CommandContext) -> Result<(), TuskError> {
     match commands {
         FocusCommands::Ls {} => run_ls(None, vec![], ctx),
-        FocusCommands::Add { text } => run_add(None, text, None, false, ctx),
+        FocusCommands::Add { text } => run_add(None, text, None, false, ctx, TaskTarget::Focus),
     }
 }
 
@@ -260,29 +263,43 @@ fn run_add(
     priority: Option<ItemPriority>,
     attach_notes: bool,
     ctx: CommandContext,
+    target: TaskTarget,
 ) -> Result<(), TuskError> {
     let new_text = sanitise_str(&text)?;
-    let tags = extract_tags(&text);
-    let mut df = load_or_empty(&ctx, date)?;
+    let tags = extract_tags(&new_text);
 
-    let notes = if attach_notes {
-        Some(edit_in_editor("")?)
-    } else {
-        None
-    };
-
-    df.items.push(Item::new(
+    let item = Item::new(
         new_text,
         priority.unwrap_or(ItemPriority::Low),
         tags,
-        notes,
-    ));
+        if attach_notes {
+            Some(edit_in_editor("")?)
+        } else {
+            None
+        },
+    );
 
-    save_dayfile(&ctx, &df)?;
+    let renderer = make_renderer(&ctx.render_opts);
 
-    if let Some(item) = df.items.last() {
-        let renderer = make_renderer(&ctx.render_opts);
-        renderer.render_summary(df.date, df.items.len(), item)?;
+    match target {
+        TaskTarget::Day => {
+            let mut df = load_day_or_empty(&ctx, date)?;
+            df.items.push(item);
+            save_dayfile(&ctx, &df)?;
+
+            if let Some(item) = df.items.last() {
+                renderer.render_summary(Some(df.date), df.items.len(), item)?;
+            }
+        },
+        TaskTarget::Focus => {
+            let mut ff = load_focus_or_empty(&ctx)?;
+            ff.items.push(item);
+            save_focusfile(&ctx, &ff)?;
+
+            if let Some(item) = ff.items.last() {
+                renderer.render_summary(None, 0, item)?;
+            }
+        }
     }
 
     Ok(())
@@ -293,7 +310,7 @@ fn run_ls(
     tags: Vec<String>,
     ctx: CommandContext,
 ) -> Result<(), TuskError> {
-    let df = load_or_empty(&ctx, date)?;
+    let df = load_day_or_empty(&ctx, date)?;
     let renderer = make_renderer(&ctx.render_opts);
 
     let render_df = if tags.is_empty() {
@@ -313,7 +330,7 @@ fn run_done(
     mark_done: bool,
     ctx: CommandContext,
 ) -> Result<(), TuskError> {
-    let mut df = load_or_empty(&ctx, date)?;
+    let mut df = load_day_or_empty(&ctx, date)?;
     let pos = validate_index(index, df.items.len())?;
 
     {
@@ -341,7 +358,7 @@ fn run_done(
 }
 
 fn run_rm(date: Option<NaiveDate>, index: usize, ctx: CommandContext) -> Result<(), TuskError> {
-    let mut df = load_or_empty(&ctx, date)?;
+    let mut df = load_day_or_empty(&ctx, date)?;
 
     let pos = validate_index(index, df.items.len())?;
     let item = df.items.remove(pos);
@@ -361,7 +378,7 @@ fn run_edit(
     priority: Option<ItemPriority>,
     ctx: CommandContext,
 ) -> Result<(), TuskError> {
-    let mut df = load_or_empty(&ctx, date)?;
+    let mut df = load_day_or_empty(&ctx, date)?;
     let pos = validate_index(index, df.items.len())?;
 
     if let Some(item) = df.items.get_mut(pos) {
@@ -391,12 +408,12 @@ fn run_edit(
 }
 
 fn run_show(date: Option<NaiveDate>, index: usize, ctx: CommandContext) -> Result<(), TuskError> {
-    let mut df = load_or_empty(&ctx, date)?;
+    let mut df = load_day_or_empty(&ctx, date)?;
     let pos = validate_index(index, df.items.len())?;
 
     if let Some(item) = df.items.get_mut(pos) {
         let renderer = make_renderer(&ctx.render_opts);
-        renderer.render_summary(df.date, index, item)?;
+        renderer.render_summary(Some(df.date), index, item)?;
     }
 
     Ok(())
@@ -417,10 +434,10 @@ fn run_migrate(
         });
     }
 
-    let mut from_df = load_or_empty(&ctx, Some(from_date))?;
+    let mut from_df = load_day_or_empty(&ctx, Some(from_date))?;
     let from_df_before = from_df.clone();
 
-    let mut to_df = load_or_empty(&ctx, Some(to_date))?;
+    let mut to_df = load_day_or_empty(&ctx, Some(to_date))?;
     let renderer = make_renderer(&ctx.render_opts);
 
     if dry_run {
@@ -472,7 +489,7 @@ fn run_review(days: Option<u64>, ctx: CommandContext) -> Result<(), TuskError> {
     let mut dayfiles: Vec<DayFile> = Vec::new();
 
     for d in start.iter_days().take_while(|d| *d < end) {
-        match load_or_empty(&ctx, Some(d)) {
+        match load_day_or_empty(&ctx, Some(d)) {
             Ok(df) => {
                 if !df.items.is_empty() {
                     dayfiles.push(df);

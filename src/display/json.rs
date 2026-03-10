@@ -31,7 +31,7 @@ impl Renderer for JsonRenderer {
         Self::to_json(&response)
     }
 
-    fn render_summary(&self, date: NaiveDate, index: usize, item: &Item) -> std::io::Result<()> {
+    fn render_summary(&self, date: Option<NaiveDate>, index: usize, item: &Item) -> std::io::Result<()> {
         let payload = ShowOutput::new(index, date, item);
         let response = Response::new("show", &payload);
         Self::to_json(&response)
@@ -70,7 +70,7 @@ impl Renderer for JsonRenderer {
         item: Option<&Item>,
     ) -> std::io::Result<()> {
         let payload = ActionOutput::new(
-            DayOutput { date, path: None },
+            DayOutput { date: Some(date), path: None },
             Reference {
                 kind: ReferenceKind::Index,
                 value: index,

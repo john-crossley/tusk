@@ -40,7 +40,7 @@ impl Renderer for MarkdownRenderer {
         Ok(())
     }
 
-    fn render_summary(&self, _date: NaiveDate, index: usize, item: &Item) -> std::io::Result<()> {
+    fn render_summary(&self, _date: Option<NaiveDate>, index: usize, item: &Item) -> std::io::Result<()> {
         let mut out = io::stdout().lock();
 
         let create_at = item.created_at.format(DATE_WITH_TIME_FORMAT);

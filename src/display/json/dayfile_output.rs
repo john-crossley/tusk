@@ -8,7 +8,8 @@ use crate::models::{
 
 #[derive(Serialize, Debug)]
 pub struct DayOutput {
-    pub date: NaiveDate,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub date: Option<NaiveDate>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
 }
@@ -82,7 +83,7 @@ impl From<&DayFile> for DayFileOutput {
 
         Self {
             day: DayOutput {
-                date: value.date,
+                date: Some(value.date),
                 path: None,
             },
             stats: DayStatsOutput { total, open, done },

@@ -31,11 +31,11 @@ impl MigrateOutput {
         Self {
             dry_run,
             from: DayOutput {
-                date: from_df.date,
+                date: Some(from_df.date),
                 path: None,
             },
             to: DayOutput {
-                date: to_date,
+                date: Some(to_date),
                 path: None,
             },
             stats: MigrateStatsOutput {

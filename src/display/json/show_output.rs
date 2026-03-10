@@ -20,7 +20,7 @@ pub struct ShowOutput {
 }
 
 impl ShowOutput {
-    pub fn new(index: usize, date: NaiveDate, item: &Item) -> Self {
+    pub fn new(index: usize, date: Option<NaiveDate>, item: &Item) -> Self {
         Self {
             day: DayOutput { date, path: None },
             reference: Reference {

@@ -50,7 +50,7 @@ impl ReviewOutput {
 
                 ReviewDayOutput {
                     day: DayOutput {
-                        date: df.date,
+                        date: Some(df.date),
                         path: None,
                     },
                     stats: DayStatsOutput { total, open, done },

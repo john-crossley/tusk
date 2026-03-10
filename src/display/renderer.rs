@@ -10,7 +10,7 @@ use crate::{
 pub trait Renderer {
     fn render_day(&self, df: &DayFile) -> std::io::Result<()>;
 
-    fn render_summary(&self, date: NaiveDate, index: usize, item: &Item) -> std::io::Result<()>;
+    fn render_summary(&self, date: Option<NaiveDate>, index: usize, item: &Item) -> std::io::Result<()>;
 
     fn render_migrate(
         &self,
