@@ -4,21 +4,19 @@ use chrono::NaiveDate;
 
 use crate::{
     CommandContext,
-    models::{dayfile::DayFile, focus_file::FocusFile, item::Item},
+    models::{dayfile::DayFile, focus_file::FocusFile},
     store::{
         day_store::DayStore,
         focus_store::FocusStore,
         fs::{day_store::FsDayStore, focus_store::FsFocusStore},
-    },
-    utils::dates::todays_date,
+    }
 };
 
 
 // TODO:
 // Can we have a make store and then pass that around instead of making it each time?
 
-pub fn load_day_or_empty(ctx: &CommandContext, date: Option<NaiveDate>) -> Result<DayFile, Error> {
-    let date = date.unwrap_or(todays_date());
+pub fn load_day_or_empty(ctx: &CommandContext, date: NaiveDate) -> Result<DayFile, Error> {
     let store = FsDayStore::new(ctx.data_dir.clone(), ctx.vault.as_deref())?;
 
     match store.load(date) {

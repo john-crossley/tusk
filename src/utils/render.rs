@@ -10,6 +10,7 @@ use crate::{
     },
     models::{dayfile::DayFile, item::Item},
     utils::{theme::Theme, tusk_error::TuskError},
+    view::agenda::Agenda,
 };
 
 #[derive(Debug, Clone, PartialEq, ValueEnum, Copy)]
@@ -58,6 +59,14 @@ pub enum RendererImpl {
 }
 
 impl RendererImpl {
+    pub fn render_agenda(&self, agenda: &Agenda) -> io::Result<()> {
+        match self {
+            RendererImpl::Terminal(r) => r.render_agenda(agenda),
+            RendererImpl::Json(r) => r.render_agenda(agenda),
+            RendererImpl::Markdown(r) => r.render_agenda(agenda),
+        }
+    }
+
     pub fn render_day(&self, df: &DayFile) -> io::Result<()> {
         match self {
             RendererImpl::Terminal(r) => r.render_day(df),
@@ -66,7 +75,12 @@ impl RendererImpl {
         }
     }
 
-    pub fn render_summary(&self, date: Option<NaiveDate>, index: usize, item: &Item) -> io::Result<()> {
+    pub fn render_summary(
+        &self,
+        date: Option<NaiveDate>,
+        index: usize,
+        item: &Item,
+    ) -> io::Result<()> {
         match self {
             RendererImpl::Terminal(r) => r.render_summary(date, index, item),
             RendererImpl::Json(r) => r.render_summary(date, index, item),

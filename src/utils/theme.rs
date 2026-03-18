@@ -22,6 +22,11 @@ impl Theme {
         }
     }
 
+    pub fn subtitle(&self, s: impl std::fmt::Display) -> ColoredString {
+        let s = s.to_string();
+        if self.color { s.bright_cyan().bold() } else { s.normal() }
+    }
+
     pub fn dim(&self, s: impl std::fmt::Display) -> ColoredString {
         let s = s.to_string();
         if self.color { s.dimmed() } else { s.normal() }

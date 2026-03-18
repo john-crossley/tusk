@@ -4,10 +4,12 @@ use chrono::NaiveDate;
 
 use crate::{
     models::{dayfile::DayFile, item::Item},
-    utils::{render::ActionKind, tusk_error::TuskError},
+    utils::{render::ActionKind, tusk_error::TuskError}, view::agenda::Agenda,
 };
 
 pub trait Renderer {
+    fn render_agenda(&self, agenda: &Agenda) -> std::io::Result<()>;
+
     fn render_day(&self, df: &DayFile) -> std::io::Result<()>;
 
     fn render_summary(&self, date: Option<NaiveDate>, index: usize, item: &Item) -> std::io::Result<()>;

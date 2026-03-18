@@ -11,7 +11,7 @@ use crate::{
         renderer::Renderer,
     },
     models::{dayfile::DayFile, item::Item},
-    utils::{helpers::item_count_meta, render::ActionKind, tusk_error::TuskError},
+    utils::{helpers::item_count_meta, render::ActionKind, tusk_error::TuskError}, view::agenda::Agenda,
 };
 
 mod action_output;
@@ -25,6 +25,10 @@ mod show_output;
 pub struct JsonRenderer;
 
 impl Renderer for JsonRenderer {
+    fn render_agenda(&self, _agenda: &Agenda) -> std::io::Result<()> {
+        Ok(())
+    }
+
     fn render_day(&self, df: &DayFile) -> std::io::Result<()> {
         let payload = DayFileOutput::from(df);
         let response = Response::<&DayFileOutput>::new("ls", &payload);

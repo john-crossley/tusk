@@ -13,7 +13,7 @@ use crate::{
         render::ActionKind,
         theme::Theme,
         tusk_error::TuskError,
-    },
+    }, view::agenda::Agenda,
 };
 
 pub const DATE_FORMAT: &str = "%a %d %b %Y";
@@ -26,6 +26,30 @@ pub struct TerminalRenderer {
 }
 
 impl Renderer for TerminalRenderer {
+    fn render_agenda(&self, agenda: &Agenda) -> std::io::Result<()> {
+
+        let mut out = io::stdout().lock();
+
+        let title = self.build_title_header(agenda.date, None);
+        Self::title_underline(&self.theme, &title, &mut out)?;
+
+        if let Some(ff) = &agenda.focusfile {
+            writeln!(out, "{}", self.theme.subtitle("Focus Tasks"))?;
+            self.render_list(&mut out, &ff.items)?;
+            
+            let underline = "-".repeat(title.chars().count());
+            writeln!(out, "{underline}")?;
+        }
+
+        if let Some(df) = &agenda.dayfile {
+            writeln!(out, "{}", self.theme.subtitle("Ephemeral Tasks"))?;
+            self.render_list(&mut out, &df.items)?;
+            self.render_footer(&mut out, df)?;
+        }
+
+        Ok(())
+    }
+
     fn render_day(&self, df: &DayFile) -> std::io::Result<()> {
         let mut out = io::stdout().lock();
 
@@ -399,7 +423,7 @@ impl TerminalRenderer {
     fn title_underline(theme: &Theme, title: &str, out: &mut impl Write) -> Result<(), Error> {
         writeln!(out)?;
         writeln!(out, "{}", theme.title(title))?;
-        let underline = "_".repeat(title.chars().count());
+        let underline = "-".repeat(title.chars().count());
         writeln!(out, "{underline}")?;
 
         Ok(())

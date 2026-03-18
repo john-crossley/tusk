@@ -9,12 +9,16 @@ use crate::{
         helpers::{item_count_meta, stats},
         render::ActionKind,
         tusk_error::TuskError,
-    },
+    }, view::agenda::Agenda,
 };
 
 pub struct MarkdownRenderer;
 
 impl Renderer for MarkdownRenderer {
+    fn render_agenda(&self, _agenda: &Agenda) -> std::io::Result<()> {
+        Ok(())
+    }
+
     fn render_day(&self, df: &DayFile) -> std::io::Result<()> {
         let mut out = io::stdout().lock();
 
