@@ -1,219 +1,33 @@
-use std::{
-    io::{self},
-    path::PathBuf,
-};
+use std::io::{self};
 
 use chrono::{Days, NaiveDate, Utc};
-use clap::{Parser, Subcommand};
+use clap::Parser;
 
 use crate::{
+    cli::command::{Cli, CommandContext, Commands, FocusCommands},
     models::{
         dayfile::DayFile,
-        item::{Item, ItemPriority},
+        item::{self, Item, ItemPriority},
     },
     utils::{
-        dates::{parse_ymd, todays_date},
+        dates::todays_date,
         editor::edit_in_editor,
         files::{load_day_or_empty, load_focus_or_empty, save_dayfile, save_focusfile},
         helpers::{extract_tags, sanitise_str, validate_index, warn_dayfile_error},
         list_scope::ListScope,
-        render::{ActionKind, RenderOpts, RenderOutput, make_renderer},
+        render::{ActionKind, make_renderer},
         task_target::TaskTarget,
         tusk_error::TuskError,
     },
     view::agenda::Agenda,
 };
 
+mod cli;
 mod display;
 mod models;
 mod store;
 mod utils;
 mod view;
-
-#[derive(Parser, Debug)]
-#[command(
-    version,
-    about = "Tusk - simple daily todos in your terminal",
-    long_about = "Tusk is a lightweight CLI that stores each day's todos in a JSON file. \
-                  Add tasks, list them, mark them as done, and export to Markdown with zero friction.",
-    subcommand = "ls"
-)]
-pub struct Cli {
-    /// Override the base data directory (default: platform-specific app data dir).
-    #[arg(long, value_name = "DIR")]
-    data_dir: Option<PathBuf>,
-
-    /// Specify the terminal output as Terminal, JSON or markdown.
-    #[arg(short, long, value_enum, default_value_t = RenderOutput::Terminal)]
-    output: RenderOutput,
-
-    /// Disable coloured output (useful in scripts or non-TTY environments).
-    #[arg(short, long)]
-    no_colour: bool,
-
-    /// Enables verbose logging, useful for debugging.
-    #[arg(long)]
-    verbose: bool,
-
-    /// Specifies which vault to operate in.
-    #[arg(short, long)]
-    vault: Option<String>,
-
-    #[command(subcommand)]
-    command: Option<Commands>,
-}
-#[derive(Subcommand, Debug)]
-enum Commands {
-    #[command(name = "ls", about = "List items for the target date")]
-    Ls {
-        /// Target date (YYYY-MM-DD). Defaults to today if omitted.
-        #[arg(short, long, value_parser = parse_ymd, value_name = "YYYY-MM-DD")]
-        date: Option<NaiveDate>,
-
-        /// Filter tasks by one or more tags
-        #[arg(long = "tag", num_args = 1..)]
-        tags: Vec<String>,
-
-        /// Filter list items by scope
-        #[arg(short = 's', long = "scope")]
-        scope: Option<ListScope>,
-    },
-
-    #[command(name = "add", about = "Add a new item to your day")]
-    Add {
-        /// Target date (YYYY-MM-DD). Defaults to today if omitted.
-        #[arg(short, long, value_parser = parse_ymd, value_name = "YYYY-MM-DD")]
-        date: Option<NaiveDate>,
-
-        /// The description of the item being added.
-        text: String,
-
-        /// The priority of the item being added.
-        #[arg(short = 'p', long = "priority")]
-        priority: Option<ItemPriority>,
-
-        /// Add a note to this item, opens in an external editor
-        #[arg(short = 'n', long = "notes")]
-        attach_notes: bool,
-    },
-
-    #[command(name = "done", about = "Mark an item done by its index")]
-    Done {
-        /// Target date (YYYY-MM-DD). Defaults to today if omitted.
-        #[arg(short, long, value_parser = parse_ymd, value_name = "YYYY-MM-DD")]
-        date: Option<NaiveDate>,
-
-        index: usize,
-    },
-
-    #[command(name = "undone", about = "Mark an item undone by its index")]
-    Undone {
-        /// Target date (YYYY-MM-DD). Defaults to today if omitted.
-        #[arg(short, long, value_parser = parse_ymd, value_name = "YYYY-MM-DD")]
-        date: Option<NaiveDate>,
-
-        index: usize,
-    },
-
-    #[command(name = "rm", about = "Remove an item from your list.")]
-    Rm {
-        /// Target date (YYYY-MM-DD). Defaults to today if omitted.
-        #[arg(short, long, value_parser = parse_ymd, value_name = "YYYY-MM-DD")]
-        date: Option<NaiveDate>,
-
-        index: usize,
-    },
-
-    #[command(name = "edit", about = "Edit an item from your list.")]
-    Edit {
-        /// Target date (YYYY-MM-DD). Defaults to today if omitted.
-        #[arg(short, long, value_parser = parse_ymd, value_name = "YYYY-MM-DD")]
-        date: Option<NaiveDate>,
-
-        index: usize,
-        text: Option<String>,
-        /// Add a note to this item, opens in an external editor
-        #[arg(short = 'n', long = "notes")]
-        attach_notes: bool,
-        /// The priority of the item being edited.
-        #[arg(short = 'p', long = "priority")]
-        priority: Option<ItemPriority>,
-    },
-
-    #[command(name = "show", about = "Show an item by its index.")]
-    Show {
-        /// Target date (YYYY-MM-DD). Defaults to today if omitted.
-        #[arg(short, long, value_parser = parse_ymd, value_name = "YYYY-MM-DD")]
-        date: Option<NaiveDate>,
-
-        index: usize,
-    },
-
-    #[command(
-        name = "migrate",
-        about = "Migrate undone items from one date to another."
-    )]
-    Migrate {
-        #[arg(name = "from", short, long, value_parser = parse_ymd, value_name = "YYYY-MM-DD")]
-        from_date: Option<NaiveDate>,
-
-        #[arg(name = "to", short, long, value_parser = parse_ymd, value_name = "YYYY-MM-DD")]
-        to_date: Option<NaiveDate>,
-
-        /// Perform a dry run to show you what changes will be made.
-        #[arg(long = "dry-run")]
-        dry_run: bool,
-    },
-
-    #[command(
-        name = "review",
-        about = "Grabs a slice of tasks within a specified time period."
-    )]
-    Review {
-        #[arg(name = "days", long)]
-        days: Option<u64>,
-    },
-
-    /// Manage persistent focus tasks
-    #[clap(subcommand)]
-    Focus(FocusCommands),
-}
-
-#[derive(Subcommand, Debug)]
-enum FocusCommands {
-    #[command(name = "ls", about = "List long running items.")]
-    Ls,
-
-    #[command(name = "add", about = "Add a new long running item.")]
-    Add {
-        /// The description of the item being added.
-        text: String,
-    },
-    #[command(name = "rm", about = "Remove a long running item from your list.")]
-    Rm {
-        /// Target date (YYYY-MM-DD). Defaults to today if omitted.
-        #[arg(short, long, value_parser = parse_ymd, value_name = "YYYY-MM-DD")]
-        date: Option<NaiveDate>,
-        /// The index of the item to be removed.
-        index: usize,
-    },
-}
-
-struct CommandContext {
-    data_dir: Option<PathBuf>,
-    vault: Option<String>,
-    render_opts: RenderOpts,
-}
-
-impl From<&Cli> for CommandContext {
-    fn from(cli: &Cli) -> Self {
-        Self {
-            data_dir: cli.data_dir.clone(),
-            vault: cli.vault.clone(),
-            render_opts: RenderOpts::from(cli),
-        }
-    }
-}
 
 fn main() {
     let cli = Cli::parse();
@@ -241,8 +55,10 @@ fn dispatch(cli: Cli, ctx: CommandContext) -> Result<(), TuskError> {
         Some(Commands::Ls { date, tags, scope }) => {
             run_ls(date, tags, ctx, scope.unwrap_or(ListScope::Day))
         }
-        Some(Commands::Done { date, index }) => run_done(date, index, true, ctx),
-        Some(Commands::Undone { date, index }) => run_done(date, index, false, ctx),
+        Some(Commands::Done { date, index }) => run_done(date, index, true, ctx, TaskTarget::Day),
+        Some(Commands::Undone { date, index }) => {
+            run_done(date, index, false, ctx, TaskTarget::Day)
+        }
         Some(Commands::Rm { date, index }) => run_rm(date, index, ctx, TaskTarget::Day),
         Some(Commands::Edit {
             date,
@@ -265,8 +81,12 @@ fn dispatch(cli: Cli, ctx: CommandContext) -> Result<(), TuskError> {
 
 fn dispatch_focus(commands: FocusCommands, ctx: CommandContext) -> Result<(), TuskError> {
     match commands {
-        FocusCommands::Ls {} => run_ls(None, vec![], ctx, ListScope::Focus),
         FocusCommands::Add { text } => run_add(None, text, None, false, ctx, TaskTarget::Focus),
+        FocusCommands::Ls {} => run_ls(None, vec![], ctx, ListScope::Focus),
+        FocusCommands::Done { date, index } => run_done(date, index, true, ctx, TaskTarget::Focus),
+        FocusCommands::Undone { date, index } => {
+            run_done(date, index, true, ctx, TaskTarget::Focus)
+        }
         FocusCommands::Rm { date, index } => run_rm(date, index, ctx, TaskTarget::Focus),
     }
 }
@@ -356,22 +176,10 @@ fn run_done(
     index: usize,
     mark_done: bool,
     ctx: CommandContext,
+    target: TaskTarget,
 ) -> Result<(), TuskError> {
     let date = date.unwrap_or(todays_date());
-    let mut df = load_day_or_empty(&ctx, date)?;
-    let pos = validate_index(index, df.items.len())?;
-
-    {
-        let item = &mut df.items[pos];
-        item.done_at = if mark_done {
-            item.done_at.take().or(Some(Utc::now()))
-        } else {
-            None
-        };
-    }
-
-    let item = &df.items[pos];
-    save_dayfile(&ctx, &df)?;
+    let renderer = make_renderer(&ctx.render_opts);
 
     let action = if mark_done {
         ActionKind::Done
@@ -379,8 +187,44 @@ fn run_done(
         ActionKind::Undone
     };
 
-    let renderer = make_renderer(&ctx.render_opts);
-    renderer.render_action(index, df.date, action, Some(&item))?;
+    let mark_item = |i: &mut Item| {
+        i.done_at = if mark_done {
+            i.done_at.take().or(Some(Utc::now()))
+        } else {
+            None
+        }
+    };
+
+    match target {
+        TaskTarget::Day => {
+            let mut df = load_day_or_empty(&ctx, date)?;
+            let pos = validate_index(index, df.items.len())?;
+
+            {
+                let item = &mut df.items[pos];
+                mark_item(item);
+            }
+
+            save_dayfile(&ctx, &df)?;
+
+            let item = &df.items[pos];
+            renderer.render_action(index, date, action, Some(item))?;
+        }
+        TaskTarget::Focus => {
+            let mut ff = load_focus_or_empty(&ctx)?;
+            let pos = validate_index(index, ff.items.len())?;
+
+            {
+                let item = &mut ff.items[pos];
+                mark_item(item);
+            }
+
+            save_focusfile(&ctx, &ff)?;
+
+            let item = &ff.items[pos];
+            renderer.render_action(index, date, action, Some(item))?;
+        }
+    }
 
     Ok(())
 }
@@ -555,8 +399,8 @@ fn run_review(days: Option<u64>, ctx: CommandContext) -> Result<(), TuskError> {
 
 fn command_name(cmd: Option<&Commands>) -> &'static str {
     match cmd {
-        Some(Commands::Add { .. }) => "add",
         Some(Commands::Ls { .. }) => "ls",
+        Some(Commands::Add { .. }) => "add",
         Some(Commands::Done { .. }) => "done",
         Some(Commands::Undone { .. }) => "undone",
         Some(Commands::Rm { .. }) => "rm",
@@ -567,6 +411,8 @@ fn command_name(cmd: Option<&Commands>) -> &'static str {
         Some(Commands::Focus(focus_cmd)) => match focus_cmd {
             FocusCommands::Ls { .. } => "focus ls",
             FocusCommands::Add { .. } => "focus add",
+            FocusCommands::Done { .. } => "focus done",
+            FocusCommands::Undone { .. } => "focus undone",
             FocusCommands::Rm { .. } => "focus rm",
         },
         None => "ls",

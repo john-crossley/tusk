@@ -42,7 +42,7 @@ impl Renderer for TerminalRenderer {
         }
 
         if let Some(df) = &agenda.dayfile {
-            writeln!(out, "{}", self.theme.subtitle("Ephemeral Tasks"))?;
+            writeln!(out, "{}", self.theme.subtitle("Daily Tasks"))?;
             self.render_list(&mut out, &df.items)?;
             self.render_footer(&mut out, df)?;
         }
