@@ -190,6 +190,15 @@ pub enum FocusCommands {
         /// The index of the item to be removed.
         index: usize,
     },
+
+    #[command(name = "show", about = "Show a long running item by its index.")]
+    Show {
+        /// Target date (YYYY-MM-DD). Defaults to today if omitted.
+        #[arg(short, long, value_parser = parse_ymd, value_name = "YYYY-MM-DD")]
+        date: Option<NaiveDate>,
+
+        index: usize,
+    },
 }
 
 pub struct CommandContext {

@@ -6,7 +6,7 @@ use serde::Serialize;
 use crate::{
     display::{
         json::{
-            action_output::ActionOutput, dayfile_output::{DayFileOutput, DayOutput}, error_output::ErrorOutput, migrate_output::MigrateOutput, response::{ErrorResponse, Response}, review_output::ReviewOutput, show_output::{Reference, ReferenceKind, ShowOutput}
+            action_output::ActionOutput, agenda_output::AgendaOutput, dayfile_output::{DayFileOutput, DayOutput}, error_output::ErrorOutput, migrate_output::MigrateOutput, response::{ErrorResponse, Response}, review_output::ReviewOutput, show_output::{Reference, ReferenceKind, ShowOutput}
         },
         renderer::Renderer,
     },
@@ -21,12 +21,16 @@ mod migrate_output;
 mod response;
 mod review_output;
 mod show_output;
+mod agenda_output;
 
 pub struct JsonRenderer;
 
 impl Renderer for JsonRenderer {
-    fn render_agenda(&self, _agenda: &Agenda) -> std::io::Result<()> {
-        Ok(())
+    fn render_agenda(&self, agenda: &Agenda) -> std::io::Result<()> {
+        let payload = AgendaOutput::from(agenda);
+        let response = Response::<&AgendaOutput>::new("focus ls", &payload);
+
+        Self::to_json(&response)
     }
 
     fn render_day(&self, df: &DayFile) -> std::io::Result<()> {

@@ -41,7 +41,7 @@ impl Renderer for TerminalRenderer {
             writeln!(out, "{underline}")?;
         }
 
-        if let Some(df) = &agenda.dayfile {
+        if let Some(df) = &agenda.dayfile && !df.items.is_empty() {
             writeln!(out, "{}", self.theme.subtitle("Daily Tasks"))?;
             self.render_list(&mut out, &df.items)?;
             self.render_footer(&mut out, df)?;

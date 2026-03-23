@@ -7,7 +7,7 @@ use crate::{
     cli::command::{Cli, CommandContext, Commands, FocusCommands},
     models::{
         dayfile::DayFile,
-        item::{self, Item, ItemPriority},
+        item::{Item, ItemPriority},
     },
     utils::{
         dates::todays_date,
@@ -67,7 +67,7 @@ fn dispatch(cli: Cli, ctx: CommandContext) -> Result<(), TuskError> {
             attach_notes,
             priority,
         }) => run_edit(date, index, text, attach_notes, priority, ctx),
-        Some(Commands::Show { date, index }) => run_show(date, index, ctx),
+        Some(Commands::Show { date, index }) => run_show(date, index, ctx, TaskTarget::Day),
         Some(Commands::Migrate {
             from_date,
             to_date,
@@ -88,6 +88,7 @@ fn dispatch_focus(commands: FocusCommands, ctx: CommandContext) -> Result<(), Tu
             run_done(date, index, true, ctx, TaskTarget::Focus)
         }
         FocusCommands::Rm { date, index } => run_rm(date, index, ctx, TaskTarget::Focus),
+        FocusCommands::Show { date, index } => run_show(date, index, ctx, TaskTarget::Focus),
     }
 }
 
@@ -149,6 +150,7 @@ fn run_ls(
     scope: ListScope,
 ) -> Result<(), TuskError> {
     let date = date.unwrap_or(todays_date());
+    let renderer = make_renderer(&ctx.render_opts);
 
     let load_day = || -> Result<DayFile, TuskError> {
         let df = load_day_or_empty(&ctx, date)?;
@@ -159,14 +161,20 @@ fn run_ls(
         })
     };
 
-    let agenda = match scope {
-        ListScope::Day => Agenda::new(date, Some(load_day()?), None),
-        ListScope::Focus => Agenda::new(date, None, Some(load_focus_or_empty(&ctx)?)),
-        ListScope::All => Agenda::new(date, Some(load_day()?), Some(load_focus_or_empty(&ctx)?)),
+    match scope {
+        ListScope::Day => {
+            let df = load_day()?;
+            renderer.render_day(&df)?
+        }
+        ListScope::Focus => {
+            let agenda = Agenda::new(date, None, Some(load_focus_or_empty(&ctx)?));
+            renderer.render_agenda(&agenda)?
+        }
+        ListScope::All => {
+            let agenda = Agenda::new(date, Some(load_day()?), Some(load_focus_or_empty(&ctx)?));
+            renderer.render_agenda(&agenda)?
+        }
     };
-
-    let renderer = make_renderer(&ctx.render_opts);
-    renderer.render_agenda(&agenda)?;
 
     Ok(())
 }
@@ -298,15 +306,29 @@ fn run_edit(
     Ok(())
 }
 
-fn run_show(date: Option<NaiveDate>, index: usize, ctx: CommandContext) -> Result<(), TuskError> {
+fn run_show(
+    date: Option<NaiveDate>,
+    index: usize,
+    ctx: CommandContext,
+    target: TaskTarget,
+) -> Result<(), TuskError> {
     let date = date.unwrap_or(todays_date());
-    let mut df = load_day_or_empty(&ctx, date)?;
-    let pos = validate_index(index, df.items.len())?;
+    let renderer = make_renderer(&ctx.render_opts);
 
-    if let Some(item) = df.items.get_mut(pos) {
-        let renderer = make_renderer(&ctx.render_opts);
-        renderer.render_summary(Some(df.date), index, item)?;
-    }
+    match target {
+        TaskTarget::Day => {
+            let df = load_day_or_empty(&ctx, date)?;
+            let pos = validate_index(index, df.items.len())?;
+            let item = &df.items[pos];
+            renderer.render_summary(Some(date), index, item)?;
+        }
+        TaskTarget::Focus => {
+            let ff = load_focus_or_empty(&ctx)?;
+            let pos = validate_index(index, ff.items.len())?;
+            let item = &ff.items[pos];
+            renderer.render_summary(Some(date), index, item)?;
+        }
+    };
 
     Ok(())
 }
@@ -414,6 +436,7 @@ fn command_name(cmd: Option<&Commands>) -> &'static str {
             FocusCommands::Done { .. } => "focus done",
             FocusCommands::Undone { .. } => "focus undone",
             FocusCommands::Rm { .. } => "focus rm",
+            FocusCommands::Show { .. } => "focus show",
         },
         None => "ls",
     }
