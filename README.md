@@ -266,3 +266,5 @@ Your freshly baked 🍞 binary will be in:
 You can move it somewhere on your $PATH for easier use, for example:
 
 `cp target/release/tusk ~/.local/bin/`
+
+> I'm not a Rust expert, you might find bugs, or the code might not be perfect. That's because it was all hand cranked. If you have any issues you'd like to report, [please feel free](https://github.com/john-crossley/tusk/issues).
