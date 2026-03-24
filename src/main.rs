@@ -1,374 +1,367 @@
-use std::{
-    io::{self, Error},
-    path::PathBuf,
-};
+use std::io::{self};
 
-use chrono::{NaiveDate, Utc};
-use clap::{Parser, Subcommand};
-
-mod models;
-mod utils;
+use chrono::{Days, NaiveDate, Utc};
+use clap::Parser;
 
 use crate::{
-    models::{dayfile::DayFile, item::Item},
-    utils::{
-        dates::{parse_ymd, today_date},
-        editor::edit_in_editor,
-        files::{load_or_create_dayfile, resolve_day_file_path, save_dayfile},
-        helpers::{
-            current_day_context, extract_tags, get_item_priority, sanitise_str, validate_index,
-        },
-        render::{RenderOpts, render, render_migrate, render_summary},
+    cli::command::{Cli, CommandContext, Commands, FocusCommands},
+    models::{
+        dayfile::DayFile,
+        item::{Item, ItemPriority},
     },
+    utils::{
+        dates::todays_date,
+        editor::edit_in_editor,
+        files::{load_day_or_empty, load_focus_or_empty, save_dayfile, save_focusfile},
+        helpers::{extract_tags, sanitise_str, validate_index, warn_dayfile_error},
+        list_scope::ListScope,
+        render::{ActionKind, make_renderer},
+        task_target::TaskTarget,
+        tusk_error::TuskError,
+    },
+    view::agenda::Agenda,
 };
 
-#[derive(Parser, Debug)]
-#[command(
-    version,
-    about = "Tusk - simple daily todos in your terminal",
-    long_about = "Tusk is a lightweight CLI that stores each day's todos in a JSON file. \
-                  Add tasks, list them, mark them as done, and export to Markdown with zero friction.",
-    subcommand = "ls"
-)]
-struct Cli {
-    /// Target date (YYYY-MM-DD). Defaults to today if omitted.
-    #[arg(short, long, value_parser = parse_ymd, value_name = "YYYY-MM-DD", global = true)]
-    date: Option<NaiveDate>,
-
-    /// Override the base data directory (default: platform-specific app data dir).
-    #[arg(long, value_name = "DIR")]
-    data_dir: Option<PathBuf>,
-
-    /// Output results as JSON instead of human-readable text.
-    #[arg(short, long)]
-    json: bool,
-
-    /// Disable coloured output (useful in scripts or non-TTY environments).
-    #[arg(short, long)]
-    no_colour: bool,
-
-    /// Enables verbose logging, useful for debugging.
-    #[arg(long)]
-    verbose: bool,
-
-    /// Specifies which vault to operate in.
-    #[arg(short, long)]
-    vault: Option<String>,
-
-    #[command(subcommand)]
-    command: Option<Commands>,
-}
-#[derive(Subcommand, Debug)]
-enum Commands {
-    #[command(name = "ls", about = "List items for the target date")]
-    Ls {
-        /// Filter tasks by one or more tags
-        #[arg(long = "tag", num_args = 1..)]
-        tags: Option<Vec<String>>,
-    },
-
-    #[command(name = "add", about = "Add a new item to your day")]
-    Add {
-        /// The description of the item being added.
-        text: String,
-
-        /// The priority of the item being added.
-        #[arg(short = 'p', long = "priority")]
-        priority: Option<String>,
-
-        /// Add a note to this item, opens in an external editor
-        #[arg(short = 'n', long = "notes")]
-        attach_notes: bool,
-    },
-
-    #[command(name = "done", about = "Mark an item done by its index")]
-    Done { index: usize },
-
-    #[command(name = "undone", about = "Mark an item undone by its index")]
-    Undone { index: usize },
-
-    #[command(name = "rm", about = "Remove an item from your list.")]
-    Rm { index: usize },
-
-    #[command(name = "edit", about = "Edit an item from your list.")]
-    Edit {
-        index: usize,
-        text: Option<String>,
-        /// Add a note to this item, opens in an external editor
-        #[arg(short = 'n', long = "notes")]
-        attach_notes: bool,
-        /// The priority of the item being edited.
-        #[arg(short = 'p', long = "priority")]
-        priority: Option<String>,
-    },
-
-    #[command(name = "show", about = "Show an item by its index.")]
-    Show { index: usize },
-
-    #[command(
-        name = "migrate",
-        about = "Migrate undone items from one date to another."
-    )]
-    Migrate {
-        #[arg(name = "from", short, long, value_parser = parse_ymd, value_name = "YYYY-MM-DD")]
-        from_date: Option<NaiveDate>,
-
-        #[arg(name = "to", short, long, value_parser = parse_ymd, value_name = "YYYY-MM-DD")]
-        to_date: Option<NaiveDate>,
-
-        /// Perform a dry run to show you what changes will be made.
-        #[arg(long = "dry-run")]
-        dry_run: bool,
-    },
-}
+mod cli;
+mod display;
+mod models;
+mod store;
+mod utils;
+mod view;
 
 fn main() {
     let cli = Cli::parse();
+    let cmd_ctx = CommandContext::from(&cli);
+    let renderer = make_renderer(&cmd_ctx.render_opts);
+    let cmd_name = command_name(cli.command.as_ref());
 
-    if let Err(e) = dispatch(&cli) {
-        eprintln!("Tusk: {e}");
+    if let Err(e) = dispatch(cli, cmd_ctx) {
+        if let Err(render_err) = renderer.render_error(cmd_name, &e) {
+            eprintln!("Tusk: {e}");
+            eprintln!("Failed to render error: {render_err}");
+        }
         std::process::exit(1);
     }
 }
 
-fn dispatch(cli: &Cli) -> io::Result<()> {
-    match cli.command.as_ref() {
+fn dispatch(cli: Cli, ctx: CommandContext) -> Result<(), TuskError> {
+    match cli.command {
         Some(Commands::Add {
+            date,
             text,
             priority,
             attach_notes,
-        }) => run_add(&cli, text, priority.as_deref(), attach_notes),
-        Some(Commands::Ls { tags }) => run_ls(&cli, tags),
-        Some(Commands::Done { index }) => run_done(&cli, *index, true),
-        Some(Commands::Undone { index }) => run_done(&cli, *index, false),
-        Some(Commands::Rm { index }) => run_rm(&cli, *index),
+        }) => run_add(date, text, priority, attach_notes, ctx, TaskTarget::Day),
+        Some(Commands::Ls { date, tags, scope }) => {
+            run_ls(date, tags, ctx, scope.unwrap_or(ListScope::Day))
+        }
+        Some(Commands::Done { date, index }) => run_done(date, index, true, ctx, TaskTarget::Day),
+        Some(Commands::Undone { date, index }) => {
+            run_done(date, index, false, ctx, TaskTarget::Day)
+        }
+        Some(Commands::Rm { date, index }) => run_rm(date, index, ctx, TaskTarget::Day),
         Some(Commands::Edit {
+            date,
             index,
             text,
             attach_notes,
             priority,
-        }) => run_edit(&cli, *index, text, attach_notes, priority.as_deref()),
-        Some(Commands::Show { index }) => run_show(&cli, *index),
+        }) => run_edit(date, index, text, attach_notes, priority, ctx),
+        Some(Commands::Show { date, index }) => run_show(date, index, ctx, TaskTarget::Day),
         Some(Commands::Migrate {
             from_date,
             to_date,
             dry_run,
-        }) => run_migrate(&cli, from_date, to_date, *dry_run),
-        None => run_ls(&cli, &None),
+        }) => run_migrate(from_date, to_date, dry_run, ctx),
+        Some(Commands::Review { days }) => run_review(days, ctx),
+        Some(Commands::Focus(focus_commands)) => dispatch_focus(focus_commands, ctx),
+        None => run_ls(None, vec![], ctx, ListScope::Day),
+    }
+}
+
+fn dispatch_focus(commands: FocusCommands, ctx: CommandContext) -> Result<(), TuskError> {
+    match commands {
+        FocusCommands::Add { text } => run_add(None, text, None, false, ctx, TaskTarget::Focus),
+        FocusCommands::Ls {} => run_ls(None, vec![], ctx, ListScope::Focus),
+        FocusCommands::Done { date, index } => run_done(date, index, true, ctx, TaskTarget::Focus),
+        FocusCommands::Undone { date, index } => {
+            run_done(date, index, true, ctx, TaskTarget::Focus)
+        }
+        FocusCommands::Rm { date, index } => run_rm(date, index, ctx, TaskTarget::Focus),
+        FocusCommands::Show { date, index } => run_show(date, index, ctx, TaskTarget::Focus),
     }
 }
 
 // command handler functions
 
 fn run_add(
-    cli: &Cli,
-    text: &str,
-    priority: Option<&str>,
-    attach_notes: &bool,
-) -> Result<(), Error> {
-    let new_text = sanitise_str(text)?;
-    let tags = extract_tags(text);
+    date: Option<NaiveDate>,
+    text: String,
+    priority: Option<ItemPriority>,
+    attach_notes: bool,
+    ctx: CommandContext,
+    target: TaskTarget,
+) -> Result<(), TuskError> {
+    let date = date.unwrap_or(todays_date());
+    let new_text = sanitise_str(&text)?;
+    let tags = extract_tags(&new_text);
 
-    let (date, path) = current_day_context(cli)?;
-    let mut dayfile = load_or_create_dayfile(&path, date)?;
-
-    let notes = if *attach_notes {
-        Some(edit_in_editor("# Notes")?)
-    } else {
-        None
-    };
-
-    dayfile.items.push(Item::new(
+    let item = Item::new(
         new_text,
-        get_item_priority(priority),
+        priority.unwrap_or(ItemPriority::Low),
         tags,
-        notes,
-    ));
-
-    save_dayfile(&path, &dayfile)?;
-
-    if let Some(item) = dayfile.items.last() {
-        render_summary(
-            None,
-            item,
-            RenderOpts {
-                json: cli.json,
-                verbose: cli.verbose,
-                no_color: cli.no_colour,
-                vault_name: None,
-                dry_run: false,
-            },
-        )?;
-    }
-
-    Ok(())
-}
-
-fn run_ls(cli: &Cli, tags: &Option<Vec<String>>) -> io::Result<()> {
-    let (date, path) = current_day_context(cli)?;
-    let mut dayfile = load_or_create_dayfile(&path, date)?;
-
-    if let Some(tags) = tags {
-        dayfile.items.retain(|i| {
-            tags.iter()
-                .all(|t| i.tags.iter().any(|it| it.eq_ignore_ascii_case(t)))
-        });
-    }
-
-    render(
-        &dayfile,
-        RenderOpts {
-            json: cli.json,
-            verbose: cli.verbose,
-            no_color: cli.no_colour,
-            vault_name: None,
-            dry_run: false,
+        if attach_notes {
+            Some(edit_in_editor("")?)
+        } else {
+            None
         },
-    )?;
+    );
+
+    let renderer = make_renderer(&ctx.render_opts);
+
+    match target {
+        TaskTarget::Day => {
+            let mut df = load_day_or_empty(&ctx, date)?;
+            df.items.push(item);
+            save_dayfile(&ctx, &df)?;
+
+            if let Some(item) = df.items.last() {
+                renderer.render_summary(Some(df.date), df.items.len(), item)?;
+            }
+        }
+        TaskTarget::Focus => {
+            let mut ff = load_focus_or_empty(&ctx)?;
+            ff.items.push(item);
+            save_focusfile(&ctx, &ff)?;
+
+            if let Some(item) = ff.items.last() {
+                renderer.render_summary(None, 0, item)?;
+            }
+        }
+    }
 
     Ok(())
 }
 
-fn run_done(cli: &Cli, idx: usize, mark_done: bool) -> io::Result<()> {
-    let (date, path) = current_day_context(cli)?;
-    let mut dayfile = load_or_create_dayfile(&path, date)?;
+fn run_ls(
+    date: Option<NaiveDate>,
+    tags: Vec<String>,
+    ctx: CommandContext,
+    scope: ListScope,
+) -> Result<(), TuskError> {
+    let date = date.unwrap_or(todays_date());
+    let renderer = make_renderer(&ctx.render_opts);
 
-    let pos = validate_index(idx, dayfile.items.len())?;
-    let item = &mut dayfile.items[pos];
-    item.done_at = if mark_done {
-        item.done_at.take().or(Some(Utc::now()))
-    } else {
-        None
+    let load_day = || -> Result<DayFile, TuskError> {
+        let df = load_day_or_empty(&ctx, date)?;
+        Ok(if tags.is_empty() {
+            df
+        } else {
+            df.filtered_by_tags(&tags)
+        })
     };
-    save_dayfile(&path, &dayfile)?;
+
+    match scope {
+        ListScope::Day => {
+            let df = load_day()?;
+            renderer.render_day(&df)?
+        }
+        ListScope::Focus => {
+            let agenda = Agenda::new(date, None, Some(load_focus_or_empty(&ctx)?));
+            renderer.render_agenda(&agenda)?
+        }
+        ListScope::All => {
+            let agenda = Agenda::new(date, Some(load_day()?), Some(load_focus_or_empty(&ctx)?));
+            renderer.render_agenda(&agenda)?
+        }
+    };
 
     Ok(())
 }
 
-fn run_rm(cli: &Cli, idx: usize) -> io::Result<()> {
-    let (date, path) = current_day_context(cli)?;
-    let mut dayfile = load_or_create_dayfile(&path, date)?;
+fn run_done(
+    date: Option<NaiveDate>,
+    index: usize,
+    mark_done: bool,
+    ctx: CommandContext,
+    target: TaskTarget,
+) -> Result<(), TuskError> {
+    let date = date.unwrap_or(todays_date());
+    let renderer = make_renderer(&ctx.render_opts);
 
-    let pos = validate_index(idx, dayfile.items.len())?;
-    let _ = &mut dayfile.items.remove(pos);
-    save_dayfile(&path, &dayfile)?;
+    let action = if mark_done {
+        ActionKind::Done
+    } else {
+        ActionKind::Undone
+    };
+
+    let mark_item = |i: &mut Item| {
+        i.done_at = if mark_done {
+            i.done_at.take().or(Some(Utc::now()))
+        } else {
+            None
+        }
+    };
+
+    match target {
+        TaskTarget::Day => {
+            let mut df = load_day_or_empty(&ctx, date)?;
+            let pos = validate_index(index, df.items.len())?;
+
+            {
+                let item = &mut df.items[pos];
+                mark_item(item);
+            }
+
+            save_dayfile(&ctx, &df)?;
+
+            let item = &df.items[pos];
+            renderer.render_action(index, date, action, Some(item))?;
+        }
+        TaskTarget::Focus => {
+            let mut ff = load_focus_or_empty(&ctx)?;
+            let pos = validate_index(index, ff.items.len())?;
+
+            {
+                let item = &mut ff.items[pos];
+                mark_item(item);
+            }
+
+            save_focusfile(&ctx, &ff)?;
+
+            let item = &ff.items[pos];
+            renderer.render_action(index, date, action, Some(item))?;
+        }
+    }
+
+    Ok(())
+}
+
+fn run_rm(
+    date: Option<NaiveDate>,
+    index: usize,
+    ctx: CommandContext,
+    target: TaskTarget,
+) -> Result<(), TuskError> {
+    let date = date.unwrap_or(todays_date());
+
+    let item = match target {
+        TaskTarget::Day => {
+            let mut df = load_day_or_empty(&ctx, date)?;
+            let pos = validate_index(index, df.items.len())?;
+            let item = df.items.remove(pos);
+            save_dayfile(&ctx, &df)?;
+            item
+        }
+        TaskTarget::Focus => {
+            let mut ff = load_focus_or_empty(&ctx)?;
+            let pos = validate_index(index, ff.items.len())?;
+            let item = ff.items.remove(pos);
+            save_focusfile(&ctx, &ff)?;
+            item
+        }
+    };
+
+    let renderer = make_renderer(&ctx.render_opts);
+    renderer.render_action(index, date, ActionKind::Removed, Some(&item))?;
 
     Ok(())
 }
 
 fn run_edit(
-    cli: &Cli,
-    idx: usize,
-    text: &Option<String>,
-    attach_notes: &bool,
-    priority: Option<&str>,
-) -> io::Result<()> {
-    let (date, path) = current_day_context(cli)?;
-    let mut dayfile = load_or_create_dayfile(&path, date)?;
+    date: Option<NaiveDate>,
+    index: usize,
+    text: Option<String>,
+    attach_notes: bool,
+    priority: Option<ItemPriority>,
+    ctx: CommandContext,
+) -> Result<(), TuskError> {
+    let date = date.unwrap_or(todays_date());
+    let mut df = load_day_or_empty(&ctx, date)?;
+    let pos = validate_index(index, df.items.len())?;
 
-    let pos = validate_index(idx, dayfile.items.len())?;
-
-    if let Some(item) = dayfile.items.get_mut(pos) {
+    if let Some(item) = df.items.get_mut(pos) {
         if let Some(s) = text {
-            item.text = sanitise_str(s)?;
+            item.text = sanitise_str(&s)?;
         }
 
-        let notes = if *attach_notes {
-            let template = item.notes.as_deref().unwrap_or("# Notes");
+        let notes = if attach_notes {
+            let template = item.notes.as_deref().unwrap_or("");
             Some(edit_in_editor(&template)?)
         } else {
             None
         };
 
-        item.notes = notes;
-
-        if priority.is_some() {
-            item.priority = get_item_priority(priority);
+        if notes.is_some() {
+            item.notes = notes;
         }
 
-        save_dayfile(&path, &dayfile)?;
+        if let Some(p) = priority {
+            item.priority = p;
+        }
+
+        save_dayfile(&ctx, &df)?;
     }
 
     Ok(())
 }
 
-fn run_show(cli: &Cli, idx: usize) -> io::Result<()> {
-    let (date, path) = current_day_context(cli)?;
-    let mut dayfile = load_or_create_dayfile(&path, date)?;
-    let pos = validate_index(idx, dayfile.items.len())?;
+fn run_show(
+    date: Option<NaiveDate>,
+    index: usize,
+    ctx: CommandContext,
+    target: TaskTarget,
+) -> Result<(), TuskError> {
+    let date = date.unwrap_or(todays_date());
+    let renderer = make_renderer(&ctx.render_opts);
 
-    if let Some(item) = dayfile.items.get_mut(pos) {
-        render_summary(
-            Some(idx),
-            item,
-            RenderOpts {
-                json: cli.json,
-                verbose: cli.verbose,
-                no_color: cli.no_colour,
-                vault_name: None,
-                dry_run: false,
-            },
-        )?;
-    }
+    match target {
+        TaskTarget::Day => {
+            let df = load_day_or_empty(&ctx, date)?;
+            let pos = validate_index(index, df.items.len())?;
+            let item = &df.items[pos];
+            renderer.render_summary(Some(date), index, item)?;
+        }
+        TaskTarget::Focus => {
+            let ff = load_focus_or_empty(&ctx)?;
+            let pos = validate_index(index, ff.items.len())?;
+            let item = &ff.items[pos];
+            renderer.render_summary(Some(date), index, item)?;
+        }
+    };
 
     Ok(())
-}
-
-fn prepare_to_migrate_items(from_dayfile: &DayFile) -> Vec<Item> {
-    from_dayfile
-        .items
-        .iter()
-        .filter(|i| i.done_at.is_none())
-        .cloned()
-        .collect()
 }
 
 fn run_migrate(
-    cli: &Cli,
-    from_date: &Option<NaiveDate>,
-    to_date: &Option<NaiveDate>,
+    from_date: Option<NaiveDate>,
+    to_date: Option<NaiveDate>,
     dry_run: bool,
-) -> io::Result<()> {
-    let from_date = from_date.unwrap_or_else(today_date);
-    let to_date = to_date.unwrap_or_else(today_date);
+    ctx: CommandContext,
+) -> Result<(), TuskError> {
+    let from_date = from_date.unwrap_or(todays_date());
+    let to_date = to_date.unwrap_or(todays_date());
 
     if from_date == to_date {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "Both `--from` and `--to` are the same value, check your input.",
-        ));
+        return Err(TuskError::InvalidInput {
+            message: "Both `--from` and `--to` are the same value, check your input.".to_string(),
+        });
     }
 
-    let from_df_path = resolve_day_file_path(
-        &from_date,
-        cli.data_dir.as_deref(),
-        cli.verbose,
-        cli.vault.as_deref(),
-    )?;
+    let mut from_df = load_day_or_empty(&ctx, from_date)?;
+    let from_df_before = from_df.clone();
 
-    let to_df_path = resolve_day_file_path(
-        &to_date,
-        cli.data_dir.as_deref(),
-        cli.verbose,
-        cli.vault.as_deref(),
-    )?;
-
-    let mut from_df = load_or_create_dayfile(&from_df_path, from_date)?;
-    let mut to_df = load_or_create_dayfile(&to_df_path, to_date)?;
-    let pending_items = prepare_to_migrate_items(&from_df);
-
-    let opts = RenderOpts {
-        json: cli.json,
-        verbose: cli.verbose,
-        no_color: cli.no_colour,
-        vault_name: None,
-        dry_run,
-    };
+    let mut to_df = load_day_or_empty(&ctx, to_date)?;
+    let renderer = make_renderer(&ctx.render_opts);
 
     if dry_run {
-        let mut preview = to_df.clone();
-        preview.items.extend_from_slice(&pending_items);
-        render_migrate(&preview, &from_df, &pending_items, opts)?;
+        let mut pending_items = from_df.migratable_items();
+
+        for i in pending_items.iter_mut() {
+            i.migrated_from = Some(from_date);
+        }
+
+        renderer.render_migrate(to_df.date, &from_df_before, &pending_items, true)?;
     } else {
         let (mut to_move, to_keep): (Vec<Item>, Vec<Item>) =
             from_df.items.into_iter().partition(|i| i.done_at.is_none());
@@ -378,13 +371,73 @@ fn run_migrate(
         }
 
         from_df.items = to_keep;
+        let moved_items = to_move.clone();
         to_df.items.extend(to_move);
 
-        save_dayfile(&from_df_path, &from_df)?;
-        save_dayfile(&to_df_path, &to_df)?;
+        save_dayfile(&ctx, &from_df)?;
+        save_dayfile(&ctx, &to_df)?;
 
-        render_migrate(&to_df, &from_df, &pending_items, opts)?;
+        renderer.render_migrate(to_df.date, &from_df_before, &moved_items, false)?;
     }
 
     Ok(())
+}
+
+fn run_review(days: Option<u64>, ctx: CommandContext) -> Result<(), TuskError> {
+    let days = days.unwrap_or(1);
+
+    if days > 365 {
+        return Err(TuskError::InvalidInput {
+            message: "Review can't be more than 365 days".to_string(),
+        });
+    }
+
+    let today = todays_date();
+
+    let start = today
+        .checked_sub_days(Days::new(days))
+        .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "data underflow"))?;
+
+    let end = today;
+
+    let mut dayfiles: Vec<DayFile> = Vec::new();
+
+    for d in start.iter_days().take_while(|d| *d < end) {
+        match load_day_or_empty(&ctx, d) {
+            Ok(df) => {
+                if !df.items.is_empty() {
+                    dayfiles.push(df);
+                }
+            }
+            Err(e) => warn_dayfile_error(d, &e, ctx.render_opts.verbose),
+        }
+    }
+
+    let renderer = make_renderer(&ctx.render_opts);
+    renderer.render_review(start, end, days, &dayfiles)?;
+
+    Ok(())
+}
+
+fn command_name(cmd: Option<&Commands>) -> &'static str {
+    match cmd {
+        Some(Commands::Ls { .. }) => "ls",
+        Some(Commands::Add { .. }) => "add",
+        Some(Commands::Done { .. }) => "done",
+        Some(Commands::Undone { .. }) => "undone",
+        Some(Commands::Rm { .. }) => "rm",
+        Some(Commands::Edit { .. }) => "edit",
+        Some(Commands::Show { .. }) => "show",
+        Some(Commands::Migrate { .. }) => "migrate",
+        Some(Commands::Review { .. }) => "review",
+        Some(Commands::Focus(focus_cmd)) => match focus_cmd {
+            FocusCommands::Ls { .. } => "focus ls",
+            FocusCommands::Add { .. } => "focus add",
+            FocusCommands::Done { .. } => "focus done",
+            FocusCommands::Undone { .. } => "focus undone",
+            FocusCommands::Rm { .. } => "focus rm",
+            FocusCommands::Show { .. } => "focus show",
+        },
+        None => "ls",
+    }
 }

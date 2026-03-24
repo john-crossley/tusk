@@ -1,0 +1,112 @@
+use std::io::{self, IsTerminal};
+
+use colored::{ColoredString, Colorize};
+
+use crate::models::item::ItemPriority;
+
+pub struct Theme {
+    pub color: bool,
+}
+
+impl Theme {
+    pub fn new(color: bool) -> Self {
+        let color = io::stdout().is_terminal() && color;
+        Self { color }
+    }
+
+    pub fn title(&self, s: &str) -> ColoredString {
+        if self.color {
+            s.bold().white()
+        } else {
+            s.normal()
+        }
+    }
+
+    pub fn subtitle(&self, s: impl std::fmt::Display) -> ColoredString {
+        let s = s.to_string();
+        if self.color { s.bright_cyan().bold() } else { s.normal() }
+    }
+
+    pub fn dim(&self, s: impl std::fmt::Display) -> ColoredString {
+        let s = s.to_string();
+        if self.color { s.dimmed() } else { s.normal() }
+    }
+
+    pub fn plain(&self, s: &str) -> ColoredString {
+        s.normal()
+    }
+
+    pub fn ok(&self, s: impl std::fmt::Display) -> ColoredString {
+        let s = s.to_string();
+
+        if self.color {
+            s.green().bold()
+        } else {
+            s.normal()
+        }
+    }
+
+    pub fn warn(&self, s: impl std::fmt::Display) -> ColoredString {
+        let s = s.to_string();
+
+        if self.color {
+            s.yellow().bold()
+        } else {
+            s.normal()
+        }
+    }
+
+    pub fn error(&self, s: impl std::fmt::Display) -> ColoredString {
+        let s = s.to_string();
+
+        if self.color {
+            s.red().bold()
+        } else {
+            s.normal()
+        }
+    }
+
+    pub fn hint(&self, s: &str) -> ColoredString {
+        if self.color {
+            s.green().italic()
+        } else {
+            s.normal()
+        }
+    }
+
+    pub fn info(&self, s: impl std::fmt::Display) -> ColoredString {
+        let s = s.to_string();
+    
+        if self.color {
+            s.blue().dimmed().bold()
+        } else {
+            s.normal()
+        }
+    }
+
+    pub fn checkbox(&self, done: bool) -> &'static str {
+        if self.color && io::stdout().is_terminal() {
+            if done { "☑" } else { "☐" }
+        } else {
+            if done { "[x]" } else { "[ ]" }
+        }
+    }
+
+    pub fn priority(&self, p: &ItemPriority) -> ColoredString {
+        let g = match p {
+            ItemPriority::High => "‼",
+            ItemPriority::Medium => "▲",
+            ItemPriority::Low => "▽",
+        };
+
+        if !self.color {
+            return g.normal();
+        }
+
+        match p {
+            ItemPriority::High => g.red().bold(),
+            ItemPriority::Medium => g.yellow().bold(),
+            ItemPriority::Low => g.dimmed(),
+        }
+    }
+}

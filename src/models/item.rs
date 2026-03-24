@@ -1,13 +1,44 @@
+use core::fmt;
+
 use chrono::{DateTime, NaiveDate, Utc};
+use clap::ValueEnum;
 use nanoid::nanoid;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
 #[serde(rename_all = "lowercase")]
 pub enum ItemPriority {
     High,
     Medium,
     Low,
+}
+
+impl fmt::Display for ItemPriority {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self {
+            ItemPriority::High => "high",
+            ItemPriority::Medium => "medium",
+            ItemPriority::Low => "low",
+        };
+        f.write_str(s)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ItemStatus {
+    Open,
+    Done,
+}
+
+impl fmt::Display for ItemStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self {
+            ItemStatus::Open => "open",
+            ItemStatus::Done => "done",
+        };
+        f.write_str(s)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -40,6 +71,14 @@ impl Item {
             due: None,
             notes,
             migrated_from: None,
+        }
+    }
+
+    pub fn status(&self) -> ItemStatus {
+        if self.done_at.is_some() {
+            ItemStatus::Done
+        } else {
+            ItemStatus::Open
         }
     }
 }

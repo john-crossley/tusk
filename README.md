@@ -35,9 +35,8 @@ t [OPTIONS] <COMMAND>
 
 ### Global options
 
-* `-d --date <YYYY-MM-DD>`: Target date, defaults to today's date.
 * `--data-dir <DIR>`: Override the base data directory.
-* `-j`, `--json`: Outputs results as JSON instead of text.
+* `-o`, `--output`: Outputs options `"md"|"json"|"terminal"`, defaults to `"terminal"`.
 * `--no-colour`: Disable coloured output.
 * `--verbose`: Enable verbose logging.
 
@@ -50,11 +49,14 @@ List tasks for the day
 ```bash
 t ls
 t ls --tag work shopping
+t ls -s day
 ```
 
 #### Options
 
+* `-d`, `--date <YYYY-MM-DD>`: The from date, can use `yesterday`, `today`, `tomorrow`. Defaults to current date.
 * `--tag <TAG>`: Filter tasks by one or more tags.
+* `-s, --scope <SCOPE>`: The scope of the tasks to be shown, can be `day`, `focus` or `all`. Defaults to `day`.
 
 ### add
 
@@ -67,6 +69,7 @@ t add "Eat more fruit and nuts" -p high -n
 
 #### Options
 
+* `-d`, `--date <YYYY-MM-DD>`: The from date, can use `yesterday`, `today`, `tomorrow`. Defaults to current date.
 * `-p, --priority <LEVEL>`: Set priority (low, med, or high), defaults to low.
 * `-n`, `--notes`: Attach notes (opens in your editor).
 
@@ -106,6 +109,7 @@ t edit 4 -p high|med|low
 
 #### Options
 
+* `-d`, `--date <YYYY-MM-DD>`: The from date, can use `yesterday`, `today`, `tomorrow`. Defaults to current date.
 * `-n`, `--notes`: Attach or edit notes.
 
 ### show
@@ -117,7 +121,11 @@ t show 5
 ```
 Displays the task, priority, tags, notes, and metadata in a nice formatted view.
 
-### Migrate
+#### Options
+
+* `-d`, `--date <YYYY-MM-DD>`: The from date, can use `yesterday`, `today`, `tomorrow`. Defaults to current date.
+
+### migrate
 
 Migrate tasks from one day to another, only migrates incomplete tasks.
 
@@ -131,6 +139,74 @@ t migrate --from 2025-10-02 --to tomorrow
 * `-f`, `--from <YYYY-MM-DD>`: The from date, can use `yesterday`, `today`, `tomorrow`
 * `-t`, `--to <YYYY-MM-DD>`: The to date, can use `yesterday`, `today`, `tomorrow`
 * `--dry-run`: Output what will be migrated without actually performing the migration.
+
+### review
+
+Review tasks from the last n days.
+
+```bash
+t review --days 10
+```
+
+#### Options
+
+* `--days n`: The number of days to review (excludes current day).
+
+### Subcommands
+
+* `focus`: For managing persistent focus tasks.
+
+#### focus
+
+For times when you need a long running task, you have the `focus` subcommand. `focus` tasks will exist separately from daily tasks, so will always be present, until deleted. It's also worth noting that `focus` only supports a subset of top level tusk commands. _For now_.
+
+### focus ls
+
+List your long running focus tasks.
+
+```bash
+t focus ls
+```
+
+### focus add
+
+Add a long running focus task.
+
+```bash
+t focus add "Finish the PR to support focus tasks for Tusk 🦣"
+```
+
+### focus done
+
+Mark a long running task as done by its index.
+
+```bash
+t focus done 3
+```
+
+### focus undone
+
+Mark a long running task as undone by its index.
+
+```bash
+t focus undone 3
+```
+
+### focus rm
+
+Remove a long running task by its index
+
+```bash
+t focus rm 3
+```
+
+### focus show
+
+Show details of a single long running task.
+
+```bash
+t focus show 5
+```
 
 ### Examples
 
@@ -149,6 +225,9 @@ t ls --tag work
 
 # End of the day and you still have incomplete actions.
 t migrate --to tomorrow
+
+# Review your items from the past 10 days
+t review --days 10
 ```
 
 ### Screenshots
@@ -166,11 +245,8 @@ You will soon be able to organise todos into a different **"vault"** using the `
 
 ### What's next?
 
+* Persistent tasks. For those long running tasks that span multiple days.
 * Rich metadata parsing, at the moment it's not very exciting but.. It'll better support `!priority`, `@time`, `#tags` and `>due`.
-* Exporting to Mardown
-* Better rendering options/themes
-* Weekly summary
-* Maybe sync support?
 
 ### Build from source 🦀
 
@@ -190,3 +266,5 @@ Your freshly baked 🍞 binary will be in:
 You can move it somewhere on your $PATH for easier use, for example:
 
 `cp target/release/tusk ~/.local/bin/`
+
+> I'm not a Rust expert, you might find bugs, or the code might not be perfect. That's because it was all hand cranked. If you have any issues you'd like to report, [please feel free](https://github.com/john-crossley/tusk/issues).
