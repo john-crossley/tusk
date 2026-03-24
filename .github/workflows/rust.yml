@@ -66,11 +66,29 @@ jobs:
           zip -r "${PKG_DIR}.zip" "$PKG_DIR"
           echo "ASSET=${PKG_DIR}.zip" >> $GITHUB_ENV
 
-      - name: Upload release asset
+      - name: Upload packaged artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: ${{ env.ASSET }}
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Download packaged artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
           name: ${{ github.ref_name }}
-          files: ${{ env.ASSET }}
+          files: dist/*.zip
           generate_release_notes: true
           prerelease: ${{ contains(github.ref_name, '-') }}
         env:
