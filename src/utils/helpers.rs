@@ -1,4 +1,9 @@
-use crate::{models::dayfile::DayFile, utils::tusk_error::TuskError};
+use std::ops::Add;
+
+use crate::{
+    models::{dayfile::DayFile, focus_file::FocusFile, task_stats::TaskStats},
+    utils::tusk_error::TuskError,
+};
 
 pub fn validate_index(i: usize, len: usize) -> Result<usize, TuskError> {
     if i == 0 || i > len {
@@ -26,11 +31,7 @@ pub fn extract_tags(s: &str) -> Vec<String> {
         .collect()
 }
 
-pub fn warn_dayfile_error(
-    date: chrono::NaiveDate,
-    err: &std::io::Error,
-    verbose: bool,
-) {
+pub fn warn_dayfile_error(date: chrono::NaiveDate, err: &std::io::Error, verbose: bool) {
     use std::io::ErrorKind;
 
     if err.kind() == ErrorKind::NotFound {
@@ -40,8 +41,7 @@ pub fn warn_dayfile_error(
     if verbose {
         eprintln!(
             "warn: {} — failed to load dayfile\n     error: {}",
-            date,
-            err
+            date, err
         );
     }
 }
@@ -72,20 +72,60 @@ pub fn item_count_meta(dayfiles: &[DayFile]) -> ItemCountResult {
     }
 }
 
-pub struct DayFileStats {
+pub struct SummaryStats {
     pub completed: usize,
     pub total: usize,
     pub open: usize,
 }
 
-pub fn stats(df: &DayFile) -> DayFileStats {
-    let completed = df.items.iter().filter(|i| i.done_at.is_some()).count();
-    let total = df.items.len();
-    let open = total - completed;
+impl SummaryStats {
+    pub fn new(completed: usize, total: usize, open: usize) -> Self {
+        Self {
+            completed,
+            total,
+            open,
+        }
+    }
+}
 
-    DayFileStats {
-        completed,
-        total,
-        open,
+impl Default for SummaryStats {
+    fn default() -> Self {
+        Self {
+            completed: 0,
+            total: 0,
+            open: 0,
+        }
+    }
+}
+
+impl Add for SummaryStats {
+    type Output = SummaryStats;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        SummaryStats::new(
+            self.completed + rhs.completed,
+            self.total + rhs.total,
+            self.open + rhs.open,
+        )
+    }
+}
+
+impl From<&DayFile> for SummaryStats {
+    fn from(value: &DayFile) -> Self {
+        SummaryStats {
+            completed: value.completed(),
+            total: value.total(),
+            open: value.open(),
+        }
+    }
+}
+
+impl From<&FocusFile> for SummaryStats {
+    fn from(value: &FocusFile) -> Self {
+        SummaryStats {
+            completed: value.completed(),
+            total: value.total(),
+            open: value.open(),
+        }
     }
 }

@@ -3,29 +3,54 @@ use std::io::{self, Write};
 use chrono::{Days, NaiveDate};
 
 use crate::{
-    display::{renderer::Renderer, terminal::{DATE_FORMAT, DATE_WITH_TIME_FORMAT}},
+    display::{
+        renderer::Renderer,
+        terminal::{DATE_FORMAT, DATE_WITH_TIME_FORMAT},
+    },
     models::{dayfile::DayFile, item::Item},
     utils::{
-        helpers::{item_count_meta, stats},
+        helpers::{SummaryStats, item_count_meta},
         render::ActionKind,
         tusk_error::TuskError,
-    }, view::agenda::Agenda,
+    },
+    view::agenda::Agenda,
 };
 
 pub struct MarkdownRenderer;
 
 impl Renderer for MarkdownRenderer {
-    fn render_agenda(&self, _agenda: &Agenda) -> std::io::Result<()> {
+    fn render_agenda(&self, agenda: &Agenda) -> std::io::Result<()> {
+        let mut out = io::stdout().lock();
+
+        Self::render_header(&mut out, agenda.date)?;
+
+        if let Some(ff) = &agenda.focusfile {
+            writeln!(out, "### Focus Tasks")?;
+            self.render_list(&mut out, &ff.items)?;
+            writeln!(out)?;
+            self.render_footer(&mut out, ff.into())?;
+        }
+
+        if let Some(df) = &agenda.dayfile {
+            writeln!(out)?;
+            writeln!(out, "### Daily Tasks")?;
+            self.render_list(&mut out, &df.items)?;
+            writeln!(out)?;
+            self.render_footer(&mut out, df.into())?;
+        }
+
+        writeln!(out)?;
+        writeln!(out, "---")?;
+        writeln!(out)?;
+        self.render_footer(&mut out, agenda.stats())?;
+
         Ok(())
     }
 
     fn render_day(&self, df: &DayFile) -> std::io::Result<()> {
         let mut out = io::stdout().lock();
 
-        let title = self.build_date_line(df.date, None);
-        writeln!(out, "# Tasks")?;
-        writeln!(out, "{}", title)?;
-        writeln!(out)?;
+        Self::render_header(&mut out, df.date)?;
 
         if df.items.is_empty() {
             writeln!(
@@ -39,12 +64,18 @@ impl Renderer for MarkdownRenderer {
         }
 
         self.render_list(&mut out, &df.items)?;
-        self.render_footer(&mut out, df)?;
+        writeln!(out)?;
+        self.render_footer(&mut out, df.into())?;
 
         Ok(())
     }
 
-    fn render_summary(&self, _date: Option<NaiveDate>, index: usize, item: &Item) -> std::io::Result<()> {
+    fn render_summary(
+        &self,
+        _date: Option<NaiveDate>,
+        index: usize,
+        item: &Item,
+    ) -> std::io::Result<()> {
         let mut out = io::stdout().lock();
 
         let create_at = item.created_at.format(DATE_WITH_TIME_FORMAT);
@@ -52,18 +83,18 @@ impl Renderer for MarkdownRenderer {
         writeln!(out, "# #{} - {}", index, item.text)?;
         writeln!(out)?;
 
-        writeln!(
-            out,
-            "**Status:** {}  ",
-            item.status()
-        )?;
+        writeln!(out, "**Status:** {}  ", item.status())?;
         writeln!(out, "**Priority:** {}  ", item.priority)?;
         writeln!(out, "**Created:** {}  ", create_at)?;
 
         if let Some(done_at) = item.done_at {
-            writeln!(out, "**Completed:** {}  ", done_at.format(DATE_WITH_TIME_FORMAT))?;
+            writeln!(
+                out,
+                "**Completed:** {}  ",
+                done_at.format(DATE_WITH_TIME_FORMAT)
+            )?;
         }
-        
+
         if let Some(n) = &item.notes {
             writeln!(out)?;
             writeln!(out, "---")?;
@@ -206,6 +237,14 @@ impl Renderer for MarkdownRenderer {
 }
 
 impl MarkdownRenderer {
+
+    fn render_header(out: &mut impl Write, date: NaiveDate) -> std::io::Result<()> {
+        writeln!(out, "# Tasks")?;
+        writeln!(out)?;
+        writeln!(out, "## {}", date.format("%a %d %b %Y"))?;
+        writeln!(out)
+    }
+
     fn build_date_line(&self, to_date: NaiveDate, migration_date: Option<NaiveDate>) -> String {
         if let Some(migration_date) = migration_date {
             let from_date_s = migration_date.format("%a %d %b %Y");
@@ -233,10 +272,7 @@ impl MarkdownRenderer {
         Ok(())
     }
 
-    fn render_footer(&self, out: &mut impl Write, dayfile: &DayFile) -> std::io::Result<()> {
-        let stats = stats(dayfile);
-
-        writeln!(out)?;
+    fn render_footer(&self, out: &mut impl Write, stats: SummaryStats) -> std::io::Result<()> {
         writeln!(
             out,
             "> **{} task(s)** ({} open, {} done)",

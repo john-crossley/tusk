@@ -1,4 +1,4 @@
-use crate::models::item::Item;
+use crate::models::{item::Item, task_stats::{HasItems, TaskStats}};
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 
@@ -42,3 +42,11 @@ impl DayFile {
         }
     }
 }
+
+impl HasItems for DayFile {
+    fn items(&self) -> &[Item] {
+        &self.items
+    }
+}
+
+impl TaskStats for DayFile {}

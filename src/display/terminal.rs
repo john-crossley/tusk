@@ -8,12 +8,8 @@ use std::{
 use crate::{
     display::renderer::Renderer,
     models::{dayfile::DayFile, item::Item},
-    utils::{
-        helpers::{item_count_meta, stats},
-        render::ActionKind,
-        theme::Theme,
-        tusk_error::TuskError,
-    }, view::agenda::Agenda,
+    utils::{helpers::{SummaryStats, item_count_meta}, render::ActionKind, theme::Theme, tusk_error::TuskError},
+    view::agenda::Agenda,
 };
 
 pub const DATE_FORMAT: &str = "%a %d %b %Y";
@@ -27,7 +23,6 @@ pub struct TerminalRenderer {
 
 impl Renderer for TerminalRenderer {
     fn render_agenda(&self, agenda: &Agenda) -> std::io::Result<()> {
-
         let mut out = io::stdout().lock();
 
         let title = self.build_title_header(agenda.date, None);
@@ -36,12 +31,14 @@ impl Renderer for TerminalRenderer {
         if let Some(ff) = &agenda.focusfile {
             writeln!(out, "{}", self.theme.subtitle("Focus Tasks"))?;
             self.render_list(&mut out, &ff.items)?;
-            
+
             let underline = "-".repeat(title.chars().count());
             writeln!(out, "{underline}")?;
         }
 
-        if let Some(df) = &agenda.dayfile && !df.items.is_empty() {
+        if let Some(df) = &agenda.dayfile
+            && !df.items.is_empty()
+        {
             writeln!(out, "{}", self.theme.subtitle("Daily Tasks"))?;
             self.render_list(&mut out, &df.items)?;
             self.render_footer(&mut out, df)?;
@@ -75,7 +72,12 @@ impl Renderer for TerminalRenderer {
         Ok(())
     }
 
-    fn render_summary(&self, _date: Option<NaiveDate>, index: usize, item: &Item) -> std::io::Result<()> {
+    fn render_summary(
+        &self,
+        _date: Option<NaiveDate>,
+        index: usize,
+        item: &Item,
+    ) -> std::io::Result<()> {
         let mut out = io::stdout().lock();
 
         // Header
@@ -371,7 +373,7 @@ impl TerminalRenderer {
     }
 
     fn render_footer(&self, out: &mut impl Write, dayfile: &DayFile) -> Result<(), Error> {
-        let stats = stats(dayfile);
+        let stats = SummaryStats::from(dayfile);
 
         writeln!(
             out,

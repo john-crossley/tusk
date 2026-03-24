@@ -3,7 +3,7 @@ use serde::Serialize;
 use crate::{
     display::json::dayfile_output::{DayFileOutput, DayStatsOutput, ItemOutput},
     models::focus_file::FocusFile,
-    view::agenda::{self, Agenda},
+    view::agenda::Agenda,
 };
 
 #[derive(Serialize, Debug)]
