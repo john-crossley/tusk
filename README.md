@@ -49,12 +49,14 @@ List tasks for the day
 ```bash
 t ls
 t ls --tag work shopping
+t ls -s day
 ```
 
 #### Options
 
 * `-d`, `--date <YYYY-MM-DD>`: The from date, can use `yesterday`, `today`, `tomorrow`. Defaults to current date.
 * `--tag <TAG>`: Filter tasks by one or more tags.
+* `-s, --scope <SCOPE>`: The scope of the tasks to be shown, can be `day`, `focus` or `all`. Defaults to `day`.
 
 ### add
 
@@ -123,7 +125,7 @@ Displays the task, priority, tags, notes, and metadata in a nice formatted view.
 
 * `-d`, `--date <YYYY-MM-DD>`: The from date, can use `yesterday`, `today`, `tomorrow`. Defaults to current date.
 
-### Migrate
+### migrate
 
 Migrate tasks from one day to another, only migrates incomplete tasks.
 
@@ -138,7 +140,7 @@ t migrate --from 2025-10-02 --to tomorrow
 * `-t`, `--to <YYYY-MM-DD>`: The to date, can use `yesterday`, `today`, `tomorrow`
 * `--dry-run`: Output what will be migrated without actually performing the migration.
 
-### Review
+### review
 
 Review tasks from the last n days.
 
@@ -149,6 +151,62 @@ t review --days 10
 #### Options
 
 * `--days n`: The number of days to review (excludes current day).
+
+### Subcommands
+
+* `focus`: For managing persistent focus tasks.
+
+#### focus
+
+For times when you need a long running task, you have the `focus` subcommand. `focus` tasks will exist separately from daily tasks, so will always be present, until deleted. It's also worth noting that `focus` only supports a subset of top level tusk commands. _For now_.
+
+### focus ls
+
+List your long running focus tasks.
+
+```bash
+t focus ls
+```
+
+### focus add
+
+Add a long running focus task.
+
+```bash
+t focus add "Finish the PR to support focus tasks for Tusk 🦣"
+```
+
+### focus done
+
+Mark a long running task as done by its index.
+
+```bash
+t focus done 3
+```
+
+### focus undone
+
+Mark a long running task as undone by its index.
+
+```bash
+t focus undone 3
+```
+
+### focus rm
+
+Remove a long running task by its index
+
+```bash
+t focus rm 3
+```
+
+### focus show
+
+Show details of a single long running task.
+
+```bash
+t focus show 5
+```
 
 ### Examples
 
@@ -167,6 +225,9 @@ t ls --tag work
 
 # End of the day and you still have incomplete actions.
 t migrate --to tomorrow
+
+# Review your items from the past 10 days
+t review --days 10
 ```
 
 ### Screenshots
